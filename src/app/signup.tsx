@@ -1,4 +1,4 @@
-// app/signup.tsx  ← replace your existing signup.tsx with this
+// app/signup.tsx
 
 import { useState } from 'react';
 import {
@@ -37,6 +37,14 @@ export default function Signup() {
     setLoading(true);
     try {
       await signUp(name, email, college, password, role);
+
+      if (role === 'organizer') {
+        // Show pending message — admin needs to approve first
+        alert(
+          '✅ Account created!\n\nYour organizer request is pending admin approval. You will be able to post events once approved.'
+        );
+      }
+
       router.replace('/');
     } catch (err: any) {
       alert(err.message);
@@ -55,6 +63,7 @@ export default function Signup() {
           <Text style={styles.subheading}>Join your college event hub</Text>
         </View>
 
+        {/* Role selector */}
         <View style={styles.roleRow}>
           {(['student', 'organizer'] as const).map((r) => (
             <TouchableOpacity
@@ -69,6 +78,15 @@ export default function Signup() {
           ))}
         </View>
 
+        {/* Organizer notice */}
+        {role === 'organizer' && (
+          <View style={styles.noticeBox}>
+            <Text style={styles.noticeText}>
+              ⏳ Organizer accounts require admin approval before you can post events.
+            </Text>
+          </View>
+        )}
+
         <Field label="Full Name" placeholder="e.g. Arjun Menon" value={name} onChangeText={setName} error={errors.name} />
         <Field label="College Email" placeholder="you@college.edu" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} />
         <Field label="College / Department" placeholder="e.g. NIT Calicut – CSE" value={college} onChangeText={setCollege} error={errors.college} />
@@ -76,10 +94,7 @@ export default function Signup() {
         <Field label="Confirm Password" placeholder="Re-enter password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry error={errors.confirmPassword} />
 
         <TouchableOpacity style={styles.button} onPress={handleSignup} disabled={loading}>
-          {loading
-            ? <ActivityIndicator color="white" />
-            : <Text style={styles.buttonText}>Create Account</Text>
-          }
+          {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Create Account</Text>}
         </TouchableOpacity>
 
         <View style={styles.loginRow}>
@@ -122,11 +137,13 @@ const styles = StyleSheet.create({
   appName: { color: '#4f46e5', fontSize: 14, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 },
   heading: { color: 'white', fontSize: 32, fontWeight: 'bold', marginBottom: 6 },
   subheading: { color: '#888', fontSize: 15 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   roleBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1e1e1e', alignItems: 'center', borderWidth: 1.5, borderColor: 'transparent' },
   roleBtnActive: { borderColor: '#4f46e5', backgroundColor: '#1e1b4b' },
   roleBtnText: { color: '#888', fontWeight: '600', fontSize: 15 },
   roleBtnTextActive: { color: 'white' },
+  noticeBox: { backgroundColor: '#2a1f00', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 12, padding: 14, marginBottom: 20 },
+  noticeText: { color: '#f59e0b', fontSize: 13, lineHeight: 20 },
   fieldWrapper: { marginBottom: 16 },
   label: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' },
   input: { backgroundColor: '#1e1e1e', color: 'white', padding: 15, borderRadius: 12, fontSize: 15, borderWidth: 1.5, borderColor: 'transparent' },

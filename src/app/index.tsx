@@ -19,6 +19,7 @@ export default function HomeScreen() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [userStatus, setUserStatus] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -30,10 +31,12 @@ export default function HomeScreen() {
         const userDoc = await getDoc(doc(db, 'users', u.uid));
         if (userDoc.exists()) {
           setRole(userDoc.data().role);
+          setUserStatus(userDoc.data().status);
           setUserName(userDoc.data().name);
         }
       } else {
         setRole(null);
+        setUserStatus(null);
         setUserName(null);
       }
     });
@@ -51,6 +54,7 @@ export default function HomeScreen() {
     await logOut();
     setRole(null);
     setUserName(null);
+    setUserStatus(null);
   };
 
   const filteredEvents = events.filter((event) => {
@@ -94,6 +98,22 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {/* Admin button */}
+      {role === 'admin' && (
+        <TouchableOpacity style={styles.adminButton} onPress={() => router.push('/admin')}>
+          <Text style={styles.adminButtonText}>🛡 Admin Panel</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Organizer pending notice */}
+      {role === 'organizer' && userStatus === 'pending' && (
+        <View style={styles.pendingNotice}>
+          <Text style={styles.pendingText}>
+            ⏳ Your organizer account is pending admin approval.
+          </Text>
+        </View>
+      )}
+
       {/* Search */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -126,8 +146,8 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
 
-      {/* Organizer create button */}
-      {user && role === 'organizer' && (
+      {/* Organizer create button — only approved organizers */}
+      {role === 'organizer' && userStatus === 'approved' && (
         <Link href="/create-event" asChild>
           <TouchableOpacity style={styles.createButton}>
             <Text style={styles.buttonText}>＋ Create Event</Text>
@@ -161,15 +181,11 @@ export default function HomeScreen() {
             <Text style={styles.details}>📍 {event.venue}</Text>
             <Text style={styles.details}>🕒 {event.time}</Text>
             <Text style={styles.details}>🏷 {event.club}</Text>
-
-            {/* Student count */}
             {event.registeredUsers?.length > 0 && (
               <Text style={styles.interestedCount}>
                 👥 {event.registeredUsers.length} student{event.registeredUsers.length > 1 ? 's' : ''} interested
               </Text>
             )}
-
-            {/* View Details button → goes to event-details page */}
             <TouchableOpacity
               style={styles.registerButton}
               onPress={() => router.push(`/event-details?id=${event.id}`)}
@@ -196,6 +212,10 @@ const styles = StyleSheet.create({
   logoutButton: { backgroundColor: '#2a2a2a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#ef4444' },
   logoutText: { color: '#ef4444', fontWeight: '600', fontSize: 13 },
   buttonText: { color: 'white', fontSize: 14, fontWeight: 'bold' },
+  adminButton: { backgroundColor: '#1e1b4b', borderWidth: 1, borderColor: '#4f46e5', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
+  adminButtonText: { color: '#818cf8', fontWeight: '700', fontSize: 15 },
+  pendingNotice: { backgroundColor: '#2a1f00', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 12, padding: 12, marginBottom: 16 },
+  pendingText: { color: '#f59e0b', fontSize: 13 },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1e1e', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 },
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: { flex: 1, color: 'white', fontSize: 15 },

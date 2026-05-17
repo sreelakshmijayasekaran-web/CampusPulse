@@ -2,12 +2,10 @@
 
 import {
   collection, addDoc, getDocs, getDoc, doc,
-  query, orderBy, serverTimestamp,
+  query, orderBy, where, serverTimestamp,
   updateDoc, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type Event = {
   id: string;
@@ -16,13 +14,14 @@ export type Event = {
   time: string;
   club: string;
   category: string;
-  description: string;       // detailed info about the event
-  registerLink: string;      // external registration link (Google Form etc.)
-  registeredUsers: string[]; // array of UIDs who tapped "I'm Interested"
+  description: string;
+  registerLink: string;
+  registeredUsers: string[];
+  status: 'pending' | 'approved' | 'rejected';
   createdBy: string;
 };
 
-// ── Create Event ──────────────────────────────────────────────────────────────
+// ── Create Event (saved as pending) ──────────────────────────────────────────
 
 export async function createEvent(
   title: string,
@@ -45,6 +44,7 @@ export async function createEvent(
     description,
     registerLink,
     registeredUsers: [],
+    status: 'pending', // ← admin must approve before it shows publicly
     createdBy: user.uid,
     createdAt: serverTimestamp(),
   });
@@ -52,9 +52,24 @@ export async function createEvent(
   return docRef.id;
 }
 
-// ── Fetch All Events ──────────────────────────────────────────────────────────
+// ── Fetch only APPROVED events (for home screen) ──────────────────────────────
 
 export async function fetchEvents(): Promise<Event[]> {
+  const q = query(
+    collection(db, 'events'),
+    where('status', '==', 'approved'),
+    orderBy('createdAt', 'desc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<Event, 'id'>),
+  }));
+}
+
+// ── Fetch ALL events (for admin panel) ───────────────────────────────────────
+
+export async function fetchAllEvents(): Promise<Event[]> {
   const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({
@@ -71,7 +86,13 @@ export async function fetchEventById(id: string): Promise<Event | null> {
   return { id: snap.id, ...(snap.data() as Omit<Event, 'id'>) };
 }
 
-// ── Mark Interest (soft register) ────────────────────────────────────────────
+// ── Approve / Reject Event (admin only) ──────────────────────────────────────
+
+export async function updateEventStatus(eventId: string, status: 'approved' | 'rejected') {
+  await updateDoc(doc(db, 'events', eventId), { status });
+}
+
+// ── Mark Interest ─────────────────────────────────────────────────────────────
 
 export async function markInterest(eventId: string) {
   const user = auth.currentUser;
