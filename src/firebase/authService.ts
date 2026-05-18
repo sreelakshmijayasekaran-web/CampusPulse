@@ -11,9 +11,12 @@ import { auth, db } from './firebaseConfig';
 export async function signUp(
   name: string,
   email: string,
+  phone: string,
   college: string,
+  department: string,
+  year: string,
   password: string,
-  role: 'student' | 'organizer'
+  role: 'student' | 'organizer',
 ) {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
@@ -21,10 +24,11 @@ export async function signUp(
   await setDoc(doc(db, 'users', user.uid), {
     name,
     email,
+    phone,
     college,
+    department,
+    year,
     role,
-    // organizers start as 'pending' until admin approves
-    // students are automatically 'approved'
     status: role === 'organizer' ? 'pending' : 'approved',
     createdAt: serverTimestamp(),
   });

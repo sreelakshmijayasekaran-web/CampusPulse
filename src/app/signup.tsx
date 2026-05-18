@@ -9,10 +9,15 @@ import {
 import { Link, router } from 'expo-router';
 import { signUp } from '../firebase/authService';
 
+const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'PG'];
+
 export default function Signup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [college, setCollege] = useState('');
+  const [department, setDepartment] = useState('');
+  const [year, setYear] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'student' | 'organizer'>('student');
@@ -24,7 +29,11 @@ export default function Signup() {
     if (!name.trim()) e.name = 'Name is required';
     if (!email.trim()) e.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
-    if (!college.trim()) e.college = 'College / department is required';
+    if (!phone.trim()) e.phone = 'Phone number is required';
+    else if (!/^\d{10}$/.test(phone.trim())) e.phone = 'Enter a valid 10-digit number';
+    if (!college.trim()) e.college = 'College is required';
+    if (!department.trim()) e.department = 'Department is required';
+    if (!year) e.year = 'Please select your year';
     if (!password) e.password = 'Password is required';
     else if (password.length < 6) e.password = 'At least 6 characters';
     if (confirmPassword !== password) e.confirmPassword = 'Passwords do not match';
@@ -36,15 +45,10 @@ export default function Signup() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await signUp(name, email, college, password, role);
-
+      await signUp(name, email, phone, college, department, year, password, role);
       if (role === 'organizer') {
-        // Show pending message — admin needs to approve first
-        alert(
-          '✅ Account created!\n\nYour organizer request is pending admin approval. You will be able to post events once approved.'
-        );
+        alert('✅ Account created!\n\nYour organizer request is pending admin approval.');
       }
-
       router.replace('/');
     } catch (err: any) {
       alert(err.message);
@@ -78,7 +82,6 @@ export default function Signup() {
           ))}
         </View>
 
-        {/* Organizer notice */}
         {role === 'organizer' && (
           <View style={styles.noticeBox}>
             <Text style={styles.noticeText}>
@@ -89,7 +92,25 @@ export default function Signup() {
 
         <Field label="Full Name" placeholder="e.g. Arjun Menon" value={name} onChangeText={setName} error={errors.name} />
         <Field label="College Email" placeholder="you@college.edu" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} />
-        <Field label="College / Department" placeholder="e.g. NIT Calicut – CSE" value={college} onChangeText={setCollege} error={errors.college} />
+        <Field label="Phone Number" placeholder="10-digit mobile number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} />
+        <Field label="College" placeholder="e.g. GEC Palakkad" value={college} onChangeText={setCollege} error={errors.college} />
+        <Field label="Department" placeholder="e.g. Computer Science" value={department} onChangeText={setDepartment} error={errors.department} />
+
+        {/* Year selector */}
+        <Text style={styles.label}>Year</Text>
+        <View style={styles.yearRow}>
+          {YEARS.map((y) => (
+            <TouchableOpacity
+              key={y}
+              style={[styles.yearBtn, year === y && styles.yearBtnActive]}
+              onPress={() => setYear(y)}
+            >
+              <Text style={[styles.yearBtnText, year === y && styles.yearBtnTextActive]}>{y}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {errors.year ? <Text style={styles.errorText}>{errors.year}</Text> : null}
+
         <Field label="Password" placeholder="Min. 6 characters" value={password} onChangeText={setPassword} secureTextEntry error={errors.password} />
         <Field label="Confirm Password" placeholder="Re-enter password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry error={errors.confirmPassword} />
 
@@ -112,8 +133,8 @@ export default function Signup() {
 type FieldProps = {
   label: string; placeholder: string; value: string;
   onChangeText: (v: string) => void; secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address'; autoCapitalize?: 'none' | 'sentences';
-  error?: string;
+  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  autoCapitalize?: 'none' | 'sentences'; error?: string;
 };
 function Field({ label, placeholder, value, onChangeText, secureTextEntry, keyboardType = 'default', autoCapitalize = 'sentences', error }: FieldProps) {
   return (
@@ -148,7 +169,12 @@ const styles = StyleSheet.create({
   label: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' },
   input: { backgroundColor: '#1e1e1e', color: 'white', padding: 15, borderRadius: 12, fontSize: 15, borderWidth: 1.5, borderColor: 'transparent' },
   inputError: { borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4, marginLeft: 4 },
+  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4, marginLeft: 4, marginBottom: 8 },
+  yearRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  yearBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#1e1e1e', borderWidth: 1.5, borderColor: 'transparent' },
+  yearBtnActive: { backgroundColor: '#1e1b4b', borderColor: '#4f46e5' },
+  yearBtnText: { color: '#888', fontWeight: '600', fontSize: 13 },
+  yearBtnTextActive: { color: 'white' },
   button: { backgroundColor: '#4f46e5', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8, marginBottom: 20 },
   buttonText: { color: 'white', fontSize: 17, fontWeight: 'bold' },
   loginRow: { flexDirection: 'row', justifyContent: 'center' },
