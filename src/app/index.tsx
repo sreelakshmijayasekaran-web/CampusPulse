@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { Event, fetchEvents } from '../firebase/eventService';
 import { auth, db } from '../firebase/firebaseConfig';
 
@@ -28,6 +29,7 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -43,10 +45,25 @@ export default function HomeScreen() {
         setRole(null);
         setUserStatus(null);
         setUserName(null);
+        setUnreadCount(0);
       }
     });
     return unsub;
   }, []);
+
+  // Live unread notification count
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, 'notifications'),
+      where('uid', '==', auth.currentUser.uid),
+      where('read', '==', false)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setUnreadCount(snap.size);
+    });
+    return unsub;
+  }, [user]);
 
   useEffect(() => {
     fetchEvents()
@@ -71,8 +88,23 @@ export default function HomeScreen() {
       {/* HEADER */}
       <View style={styles.headerRow}>
 
-        {/* LEFT: App name + greeting */}
-        <View>
+        {/* LEFT: Notification bell */}
+        <TouchableOpacity
+          style={styles.notifButton}
+          onPress={() => router.push('/notifications')}
+        >
+          <Ionicons name="notifications-outline" size={26} color="white" />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* CENTER: App name + greeting */}
+        <View style={styles.centerHeader}>
           <Text style={styles.heading}>CampusPulse</Text>
           {user && userName && (
             <Text style={styles.welcomeText}>
@@ -186,28 +218,61 @@ export default function HomeScreen() {
         </View>
       ) : (
         filteredEvents.map((event) => (
-          <View key={event.id} style={styles.card}>
-            {event.category && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{event.category}</Text>
+          <TouchableOpacity
+            key={event.id}
+            style={styles.card}
+            onPress={() => router.push(`/event-details?id=${event.id}`)}
+            activeOpacity={0.85}
+          >
+            {/* Poster */}
+            {event.posterUrl ? (
+              <Image
+                source={{ uri: event.posterUrl }}
+                style={styles.cardPoster}
+                resizeMode="cover"
+              />
+            ) : null}
+
+            <View style={styles.cardBody}>
+              {event.category && (
+                <View style={styles.categoryBadge}>
+                  <Text style={styles.categoryBadgeText}>{event.category}</Text>
+                </View>
+              )}
+
+              <Text style={styles.eventTitle}>{event.title}</Text>
+              <Text style={styles.details}>📍 {event.venue}</Text>
+              <Text style={styles.details}>🕒 {event.time}</Text>
+              <Text style={styles.details}>🏷 {event.club}</Text>
+
+              {/* Deadline */}
+              {event.deadline ? (
+                <Text style={styles.deadline}>⏰ Deadline: {event.deadline}</Text>
+              ) : null}
+
+              {/* Seat limit */}
+              {event.seatLimit != null && (() => {
+                const taken = event.registeredUsers?.length ?? 0;
+                const left = event.seatLimit - taken;
+                const full = left <= 0;
+                return (
+                  <Text style={[styles.seats, full && styles.seatsFull]}>
+                    {full ? '🔴 Seats Full' : `🟢 ${left} seat${left !== 1 ? 's' : ''} left`}
+                  </Text>
+                );
+              })()}
+
+              {event.registeredUsers?.length > 0 && (
+                <Text style={styles.interestedCount}>
+                  👥 {event.registeredUsers.length} students interested
+                </Text>
+              )}
+
+              <View style={styles.viewButton}>
+                <Text style={styles.viewButtonText}>View Details & Register →</Text>
               </View>
-            )}
-            <Text style={styles.eventTitle}>{event.title}</Text>
-            <Text style={styles.details}>📍 {event.venue}</Text>
-            <Text style={styles.details}>🕒 {event.time}</Text>
-            <Text style={styles.details}>🏷 {event.club}</Text>
-            {event.registeredUsers?.length > 0 && (
-              <Text style={styles.interestedCount}>
-                👥 {event.registeredUsers.length} students interested
-              </Text>
-            )}
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => router.push(`/event-details?id=${event.id}`)}
-            >
-              <Text style={styles.buttonText}>View Details & Register →</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
         ))
       )}
 
@@ -231,21 +296,55 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  // Notification bell
+  notifButton: {
+    position: 'relative',
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+
+  centerHeader: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
   rightHeader: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 38,
   },
 
   heading: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     color: 'white',
   },
 
   welcomeText: {
     color: '#888',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 2,
   },
 
   authRow: {
@@ -377,14 +476,24 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  // Event card
   card: {
     backgroundColor: '#1e1e1e',
     borderRadius: 16,
-    padding: 18,
     marginBottom: 14,
+    overflow: 'hidden',
   },
 
-  badge: {
+  cardPoster: {
+    width: '100%',
+    height: 160,
+  },
+
+  cardBody: {
+    padding: 16,
+  },
+
+  categoryBadge: {
     backgroundColor: '#1e1b4b',
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -393,7 +502,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  badgeText: {
+  categoryBadgeText: {
     color: '#818cf8',
     fontSize: 12,
     fontWeight: '700',
@@ -412,20 +521,44 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  interestedCount: {
-    color: '#22c55e',
+  deadline: {
+    color: '#f59e0b',
     fontSize: 13,
     fontWeight: '600',
     marginTop: 6,
+    marginBottom: 2,
+  },
+
+  seats: {
+    color: '#22c55e',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+
+  seatsFull: {
+    color: '#ef4444',
+  },
+
+  interestedCount: {
+    color: '#888',
+    fontSize: 13,
+    marginTop: 4,
     marginBottom: 4,
   },
 
-  registerButton: {
+  viewButton: {
     backgroundColor: '#4f46e5',
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 12,
+  },
+
+  viewButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 
   emptyBox: {
