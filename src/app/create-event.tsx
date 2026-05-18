@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
-import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,10 +31,12 @@ export default function CreateEvent() {
   const [deadline, setDeadline] = useState('');
   const [seatLimit, setSeatLimit] = useState('');
   const [noLimit, setNoLimit] = useState(true);
-  const [posterUri, setPosterUri] = useState<string | null>(null);       // local URI
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);       // remote URL (edit mode)
+  const [posterUrl, setPosterUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const CLOUDINARY_CLOUD_NAME = 'dweb7pnto';
+  const CLOUDINARY_UPLOAD_PRESET = 'event_posters';
   const [status, setStatus] = useState<'checking' | 'approved' | 'pending' | 'rejected'>('checking');
 
   // Check organizer approval + load event data if editing
@@ -64,47 +65,66 @@ export default function CreateEvent() {
           } else {
             setNoLimit(true);
           }
-          if (event.posterUrl) setPosterUrl(event.posterUrl);
+          if (event.posterUrl) setPosterUrl(event.posterUrl ?? '');
         }
       }
     };
     init();
   }, []);
 
-  // Pick image from gallery
-  const pickImage = async () => {
+  const pickAndUploadImage = async () => {
     const { status: permStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permStatus !== 'granted') {
       Alert.alert('Permission needed', 'Allow photo library access to upload a poster.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as any,
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
     });
-    if (!result.canceled) {
-      setPosterUri(result.assets[0].uri);
-      setPosterUrl(null); // clear old remote URL preview
-    }
-  };
+    if (result.canceled) return;
 
-  // Upload image to Firebase Storage, return download URL
-  const uploadPoster = async (): Promise<string | null> => {
-    if (!posterUri) return posterUrl; // no new image picked, keep existing
+    const asset = result.assets[0];
     setUploading(true);
     try {
-      const response = await fetch(posterUri);
-      const blob = await response.blob();
-      const storage = getStorage();
-      const storageRef = ref(storage, `event-posters/${Date.now()}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const url = await getDownloadURL(storageRef);
-      return url;
-    } catch (err) {
-      Alert.alert('Upload failed', 'Could not upload poster image.');
-      return null;
+      const formData = new FormData();
+
+      // On web, asset.file is the actual File object
+      // On native, asset.uri is the file path string
+      if (asset.file) {
+        formData.append('file', asset.file);
+      } else {
+        formData.append('file', {
+          uri: asset.uri,
+          type: 'image/jpeg',
+          name: 'poster.jpg',
+        } as any);
+      }
+
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: { 'Accept': 'application/json' },
+        }
+      );
+
+      const data = await res.json();
+      console.log('Cloudinary response:', JSON.stringify(data));
+
+      if (data.secure_url) {
+        setPosterUrl(data.secure_url);
+      } else {
+        Alert.alert('Upload failed', data.error?.message ?? 'Unknown error from Cloudinary.');
+      }
+    } catch (err: any) {
+      console.log('Upload error:', err);
+      Alert.alert('Upload failed', err.message ?? 'Check your internet connection.');
     } finally {
       setUploading(false);
     }
@@ -122,7 +142,6 @@ export default function CreateEvent() {
 
     setLoading(true);
     try {
-      const uploadedUrl = await uploadPoster();
       const eventData = {
         title,
         venue,
@@ -133,7 +152,8 @@ export default function CreateEvent() {
         registerLink,
         deadline,
         seatLimit: noLimit ? null : Number(seatLimit),
-        posterUrl: uploadedUrl ?? null,
+        posterUrl: posterUrl.trim() || null,
+        ...(!isEditMode && { createdBy: auth.currentUser?.uid }),
       };
 
       if (isEditMode && editId) {
@@ -193,8 +213,6 @@ export default function CreateEvent() {
     );
   }
 
-  const previewImage = posterUri ?? posterUrl;
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
@@ -210,9 +228,18 @@ export default function CreateEvent() {
 
       {/* POSTER UPLOAD */}
       <Text style={styles.label}>Event Poster</Text>
-      <TouchableOpacity style={styles.posterPicker} onPress={pickImage}>
-        {previewImage ? (
-          <Image source={{ uri: previewImage }} style={styles.posterPreview} resizeMode="cover" />
+      <TouchableOpacity
+        style={styles.posterPicker}
+        onPress={pickAndUploadImage}
+        disabled={uploading}
+      >
+        {uploading ? (
+          <View style={styles.posterPlaceholder}>
+            <ActivityIndicator color="#4f46e5" size="large" />
+            <Text style={styles.posterPickerText}>Uploading...</Text>
+          </View>
+        ) : posterUrl ? (
+          <Image source={{ uri: posterUrl }} style={styles.posterPreview} resizeMode="cover" />
         ) : (
           <View style={styles.posterPlaceholder}>
             <Text style={styles.posterIcon}>🖼️</Text>
@@ -221,11 +248,11 @@ export default function CreateEvent() {
           </View>
         )}
       </TouchableOpacity>
-      {previewImage && (
-        <TouchableOpacity onPress={() => { setPosterUri(null); setPosterUrl(null); }}>
+      {posterUrl ? (
+        <TouchableOpacity onPress={() => setPosterUrl('')}>
           <Text style={styles.removeImage}>✕ Remove image</Text>
         </TouchableOpacity>
-      )}
+      ) : null}
 
       {/* BASIC FIELDS */}
       <Text style={styles.label}>Event Title *</Text>
@@ -332,11 +359,11 @@ export default function CreateEvent() {
         onPress={handleSubmit}
         disabled={loading || uploading}
       >
-        {loading || uploading ? (
+        {loading ? (
           <ActivityIndicator color="white" />
         ) : (
           <Text style={styles.buttonText}>
-            {uploading ? 'Uploading…' : isEditMode ? '💾 Save Changes' : 'Submit Event'}
+            {isEditMode ? '💾 Save Changes' : 'Submit Event'}
           </Text>
         )}
       </TouchableOpacity>

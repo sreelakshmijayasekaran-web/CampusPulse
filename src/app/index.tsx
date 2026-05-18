@@ -112,6 +112,14 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
+        {/* CREATE EVENT */}
+      {role === 'organizer' && userStatus === 'approved' && (
+        <Link href="/create-event" asChild>
+          <TouchableOpacity style={styles.createButton}>
+            <Text style={styles.buttonText}>＋ Create Event</Text>
+          </TouchableOpacity>
+        </Link>
+      )}
 
         {/* RIGHT: Profile icon OR login/signup buttons */}
         <View style={styles.rightHeader}>
@@ -193,14 +201,7 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
 
-      {/* CREATE EVENT */}
-      {role === 'organizer' && userStatus === 'approved' && (
-        <Link href="/create-event" asChild>
-          <TouchableOpacity style={styles.createButton}>
-            <Text style={styles.buttonText}>＋ Create Event</Text>
-          </TouchableOpacity>
-        </Link>
-      )}
+      
 
       <Text style={styles.subheading}>
         {selectedCategory === 'All' ? 'Upcoming Events' : selectedCategory}
@@ -217,63 +218,66 @@ export default function HomeScreen() {
           <Text style={styles.emptySubtext}>Try a different search or category</Text>
         </View>
       ) : (
-        filteredEvents.map((event) => (
-          <TouchableOpacity
-            key={event.id}
-            style={styles.card}
-            onPress={() => router.push(`/event-details?id=${event.id}`)}
-            activeOpacity={0.85}
-          >
-            {/* Poster */}
-            {event.posterUrl ? (
-              <Image
-                source={{ uri: event.posterUrl }}
-                style={styles.cardPoster}
-                resizeMode="cover"
-              />
-            ) : null}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.posterRow}
+        >
+          {filteredEvents.map((event) => {
+            const taken = event.registeredUsers?.length ?? 0;
+            const isFull = event.seatLimit != null && taken >= event.seatLimit;
+            return (
+              <TouchableOpacity
+                key={event.id}
+                style={styles.posterCard}
+                onPress={() => router.push(`/event-details?id=${event.id}`)}
+                activeOpacity={0.85}
+              >
+                {/* Poster image or placeholder */}
+                {event.posterUrl ? (
+                  <Image
+                    source={{ uri: event.posterUrl }}
+                    style={styles.posterImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.posterPlaceholder}>
+                    <Text style={styles.posterPlaceholderEmoji}>📅</Text>
+                    <Text style={styles.posterPlaceholderTitle} numberOfLines={3}>
+                      {event.title}
+                    </Text>
+                    <Text style={styles.posterPlaceholderClub} numberOfLines={1}>
+                      {event.club}
+                    </Text>
+                  </View>
+                )}
 
-            <View style={styles.cardBody}>
-              {event.category && (
-                <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryBadgeText}>{event.category}</Text>
+                {/* Category badge overlay on top-left */}
+                {event.category ? (
+                  <View style={styles.posterBadge}>
+                    <Text style={styles.posterBadgeText}>{event.category}</Text>
+                  </View>
+                ) : null}
+
+                {/* Full badge on top-right */}
+                {isFull ? (
+                  <View style={styles.posterFullBadge}>
+                    <Text style={styles.posterFullBadgeText}>FULL</Text>
+                  </View>
+                ) : null}
+
+                {/* Info below poster */}
+                <View style={styles.posterInfo}>
+                  <Text style={styles.posterTitle} numberOfLines={2}>{event.title}</Text>
+                  <Text style={styles.posterSub} numberOfLines={1}>🕒 {event.time}</Text>
+                  {taken > 0 && (
+                    <Text style={styles.posterCount}>👥 {taken} registered</Text>
+                  )}
                 </View>
-              )}
-
-              <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={styles.details}>📍 {event.venue}</Text>
-              <Text style={styles.details}>🕒 {event.time}</Text>
-              <Text style={styles.details}>🏷 {event.club}</Text>
-
-              {/* Deadline */}
-              {event.deadline ? (
-                <Text style={styles.deadline}>⏰ Deadline: {event.deadline}</Text>
-              ) : null}
-
-              {/* Seat limit */}
-              {event.seatLimit != null && (() => {
-                const taken = event.registeredUsers?.length ?? 0;
-                const left = event.seatLimit - taken;
-                const full = left <= 0;
-                return (
-                  <Text style={[styles.seats, full && styles.seatsFull]}>
-                    {full ? '🔴 Seats Full' : `🟢 ${left} seat${left !== 1 ? 's' : ''} left`}
-                  </Text>
-                );
-              })()}
-
-              {event.registeredUsers?.length > 0 && (
-                <Text style={styles.interestedCount}>
-                  👥 {event.registeredUsers.length} students interested
-                </Text>
-              )}
-
-              <View style={styles.viewButton}>
-                <Text style={styles.viewButtonText}>View Details & Register →</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       )}
 
       <View style={{ height: 40 }} />
@@ -369,6 +373,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: 'white',
     fontSize: 14,
+    marginTop: -10,
     fontWeight: 'bold',
   },
 
@@ -461,8 +466,11 @@ const styles = StyleSheet.create({
 
   createButton: {
     backgroundColor: '#22c55e',
+    marginTop:15,
     padding: 12,
-    borderRadius: 12,
+    height:12,
+    width:130,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 16,
   },
@@ -476,89 +484,108 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  // Event card
-  card: {
+  // Poster card row
+  posterRow: {
+    paddingRight: 20,
+    paddingBottom: 20,
+    gap: 14,
+  },
+
+  posterCard: {
+    width: 160,
     backgroundColor: '#1e1e1e',
-    borderRadius: 16,
-    marginBottom: 14,
+    borderRadius: 14,
     overflow: 'hidden',
   },
 
-  cardPoster: {
-    width: '100%',
-    height: 160,
+  posterImage: {
+    width: 160,
+    height: 220,
   },
 
-  cardBody: {
-    padding: 16,
-  },
-
-  categoryBadge: {
+  posterPlaceholder: {
+    width: 160,
+    height: 220,
     backgroundColor: '#1e1b4b',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-
-  categoryBadgeText: {
-    color: '#818cf8',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  eventTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-
-  details: {
-    color: '#888',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-
-  deadline: {
-    color: '#f59e0b',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 6,
-    marginBottom: 2,
-  },
-
-  seats: {
-    color: '#22c55e',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-
-  seatsFull: {
-    color: '#ef4444',
-  },
-
-  interestedCount: {
-    color: '#888',
-    fontSize: 13,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-
-  viewButton: {
-    backgroundColor: '#4f46e5',
-    padding: 12,
-    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    padding: 12,
+    gap: 8,
   },
 
-  viewButtonText: {
+  posterPlaceholderEmoji: {
+    fontSize: 32,
+  },
+
+  posterPlaceholderTitle: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  posterPlaceholderClub: {
+    color: '#818cf8',
+    fontSize: 11,
+    textAlign: 'center',
+  },
+
+  posterBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(79,70,229,0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+
+  posterBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  posterFullBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(239,68,68,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+
+  posterFullBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  posterInfo: {
+    padding: 10,
+    gap: 3,
+  },
+
+  posterTitle: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: 'bold',
+    lineHeight: 18,
+  },
+
+  posterSub: {
+    color: '#888',
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  posterCount: {
+    color: '#22c55e',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
   },
 
   emptyBox: {
