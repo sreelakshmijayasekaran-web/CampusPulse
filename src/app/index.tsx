@@ -14,9 +14,8 @@ import { Link, router } from 'expo-router';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { logOut } from '../firebase/authService';
 import { Event, fetchEvents } from '../firebase/eventService';
-import { auth, db } from '../firebase/firebaseConfig'; // ← added db here
+import { auth, db } from '../firebase/firebaseConfig';
 
 const CATEGORIES = ['All', 'Hackathon', 'Workshop', 'Seminar', 'Cultural', 'Sports', 'Other'];
 
@@ -33,7 +32,6 @@ export default function HomeScreen() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-
       if (u) {
         const userDoc = await getDoc(doc(db, 'users', u.uid));
         if (userDoc.exists()) {
@@ -47,7 +45,6 @@ export default function HomeScreen() {
         setUserName(null);
       }
     });
-
     return unsub;
   }, []);
 
@@ -58,22 +55,13 @@ export default function HomeScreen() {
       .finally(() => setLoadingEvents(false));
   }, []);
 
-  const handleLogout = async () => {
-    await logOut();
-    setRole(null);
-    setUserName(null);
-    setUserStatus(null);
-  };
-
   const filteredEvents = events.filter((event) => {
     const matchesSearch =
       event.title.toLowerCase().includes(search.toLowerCase()) ||
       event.venue.toLowerCase().includes(search.toLowerCase()) ||
       event.club.toLowerCase().includes(search.toLowerCase());
-
     const matchesCategory =
       selectedCategory === 'All' || event.category === selectedCategory;
-
     return matchesSearch && matchesCategory;
   });
 
@@ -83,10 +71,9 @@ export default function HomeScreen() {
       {/* HEADER */}
       <View style={styles.headerRow}>
 
-        {/* LEFT SIDE */}
+        {/* LEFT: App name + greeting */}
         <View>
           <Text style={styles.heading}>CampusPulse</Text>
-
           {user && userName && (
             <Text style={styles.welcomeText}>
               👋 Hey, {userName.split(' ')[0]}!
@@ -94,20 +81,11 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* RIGHT SIDE (PROFILE + AUTH) */}
+        {/* RIGHT: Profile icon OR login/signup buttons */}
         <View style={styles.rightHeader}>
-
-          {/* PROFILE ICON */}
-          {user && (
-            <TouchableOpacity onPress={() => router.push('/profile')}>
-              <Ionicons name="person-circle-outline" size={36} color="white" />
-            </TouchableOpacity>
-          )}
-
-          {/* AUTH BUTTONS */}
           {user ? (
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutText}>Log Out</Text>
+            <TouchableOpacity onPress={() => router.push('/profile')}>
+              <Ionicons name="person-circle-outline" size={38} color="white" />
             </TouchableOpacity>
           ) : (
             <View style={styles.authRow}>
@@ -116,7 +94,6 @@ export default function HomeScreen() {
                   <Text style={styles.buttonText}>Sign Up</Text>
                 </TouchableOpacity>
               </Link>
-
               <Link href="/login" asChild>
                 <TouchableOpacity style={styles.loginButton}>
                   <Text style={styles.buttonText}>Log In</Text>
@@ -124,8 +101,8 @@ export default function HomeScreen() {
               </Link>
             </View>
           )}
-
         </View>
+
       </View>
 
       {/* ADMIN */}
@@ -174,18 +151,10 @@ export default function HomeScreen() {
         {CATEGORIES.map((cat) => (
           <TouchableOpacity
             key={cat}
-            style={[
-              styles.categoryTag,
-              selectedCategory === cat && styles.categoryTagActive,
-            ]}
+            style={[styles.categoryTag, selectedCategory === cat && styles.categoryTagActive]}
             onPress={() => setSelectedCategory(cat)}
           >
-            <Text
-              style={[
-                styles.categoryText,
-                selectedCategory === cat && styles.categoryTextActive,
-              ]}
-            >
+            <Text style={[styles.categoryText, selectedCategory === cat && styles.categoryTextActive]}>
               {cat}
             </Text>
           </TouchableOpacity>
@@ -213,9 +182,7 @@ export default function HomeScreen() {
         <View style={styles.emptyBox}>
           <Text style={styles.emptyEmoji}>🔎</Text>
           <Text style={styles.emptyText}>No events found</Text>
-          <Text style={styles.emptySubtext}>
-            Try a different search or category
-          </Text>
+          <Text style={styles.emptySubtext}>Try a different search or category</Text>
         </View>
       ) : (
         filteredEvents.map((event) => (
@@ -225,25 +192,20 @@ export default function HomeScreen() {
                 <Text style={styles.badgeText}>{event.category}</Text>
               </View>
             )}
-
             <Text style={styles.eventTitle}>{event.title}</Text>
             <Text style={styles.details}>📍 {event.venue}</Text>
             <Text style={styles.details}>🕒 {event.time}</Text>
             <Text style={styles.details}>🏷 {event.club}</Text>
-
             {event.registeredUsers?.length > 0 && (
               <Text style={styles.interestedCount}>
                 👥 {event.registeredUsers.length} students interested
               </Text>
             )}
-
             <TouchableOpacity
               style={styles.registerButton}
               onPress={() => router.push(`/event-details?id=${event.id}`)}
             >
-              <Text style={styles.buttonText}>
-                View Details & Register →
-              </Text>
+              <Text style={styles.buttonText}>View Details & Register →</Text>
             </TouchableOpacity>
           </View>
         ))
@@ -254,7 +216,6 @@ export default function HomeScreen() {
   );
 }
 
-/* STYLES */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -271,9 +232,8 @@ const styles = StyleSheet.create({
   },
 
   rightHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
   },
 
   heading: {
@@ -305,21 +265,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
-  },
-
-  logoutButton: {
-    backgroundColor: '#2a2a2a',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-  },
-
-  logoutText: {
-    color: '#ef4444',
-    fontWeight: '600',
-    fontSize: 13,
   },
 
   buttonText: {
