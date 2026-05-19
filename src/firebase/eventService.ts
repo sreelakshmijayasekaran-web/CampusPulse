@@ -25,16 +25,16 @@ export type Event = {
   category: string;
   description: string;
   registerLink: string;
-  registeredUsers: string[];
+  registeredUsers: string[];   // fully registered users
+  interestedUsers?: string[];  // users who only marked interest
   status: 'pending' | 'approved' | 'rejected';
   createdBy: string;
-  // new fields
   deadline?: string;
   seatLimit?: number | null;
   posterUrl?: string | null;
 };
 
-// ── Create Event (saved as pending) ──────────────────────────────────────────
+// ── Create Event ──────────────────────────────────────────────────────────────
 
 export async function createEvent(data: {
   title: string;
@@ -54,6 +54,7 @@ export async function createEvent(data: {
   const docRef = await addDoc(collection(db, 'events'), {
     ...data,
     registeredUsers: [],
+    interestedUsers: [],
     status: 'pending',
     createdBy: user.uid,
     createdAt: serverTimestamp(),
@@ -62,16 +63,19 @@ export async function createEvent(data: {
   return docRef.id;
 }
 
-// ── Update Event (organizer edit) ─────────────────────────────────────────────
+// ── Update Event ──────────────────────────────────────────────────────────────
 
-export async function updateEvent(eventId: string, data: Partial<Omit<Event, 'id' | 'createdBy' | 'registeredUsers' | 'status'>>) {
+export async function updateEvent(
+  eventId: string,
+  data: Partial<Omit<Event, 'id' | 'createdBy' | 'registeredUsers' | 'interestedUsers' | 'status'>>
+) {
   await updateDoc(doc(db, 'events', eventId), {
     ...data,
     updatedAt: serverTimestamp(),
   });
 }
 
-// ── Fetch only APPROVED events (for home screen) ──────────────────────────────
+// ── Fetch only APPROVED events (home screen) ──────────────────────────────────
 
 export async function fetchEvents(): Promise<Event[]> {
   const q = query(
@@ -86,7 +90,7 @@ export async function fetchEvents(): Promise<Event[]> {
   }));
 }
 
-// ── Fetch ALL events (for admin panel) ───────────────────────────────────────
+// ── Fetch ALL events (admin panel) ────────────────────────────────────────────
 
 export async function fetchAllEvents(): Promise<Event[]> {
   const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'));
@@ -105,7 +109,7 @@ export async function fetchEventById(id: string): Promise<Event | null> {
   return { id: snap.id, ...(snap.data() as Omit<Event, 'id'>) };
 }
 
-// ── Fetch events created by the logged-in organizer ───────────────────────────
+// ── Fetch events by the logged-in organizer ───────────────────────────────────
 
 export async function fetchMyEvents(): Promise<Event[]> {
   const user = auth.currentUser;
@@ -122,39 +126,67 @@ export async function fetchMyEvents(): Promise<Event[]> {
   }));
 }
 
-// ── Approve / Reject Event (admin only) ──────────────────────────────────────
+// ── Fetch events the current user has REGISTERED for ─────────────────────────
+// (only registeredUsers[], not interestedUsers)
+
+export async function fetchMyRegisteredEvents(): Promise<Event[]> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in.');
+
+  const q = query(
+    collection(db, 'events'),
+    where('registeredUsers', 'array-contains', user.uid),
+    orderBy('createdAt', 'desc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<Event, 'id'>),
+  }));
+}
+
+// ── Approve / Reject Event (admin) ────────────────────────────────────────────
 
 export async function updateEventStatus(eventId: string, status: 'approved' | 'rejected') {
   await updateDoc(doc(db, 'events', eventId), { status });
 }
 
-// ── Mark Interest ─────────────────────────────────────────────────────────────
+// ── Mark Interest (adds to interestedUsers only, NOT registeredUsers) ─────────
 
 export async function markInterest(eventId: string) {
   const user = auth.currentUser;
   if (!user) throw new Error('You must be logged in.');
 
-  const eventSnap = await getDoc(doc(db, 'events', eventId));
-  if (!eventSnap.exists()) throw new Error('Event not found.');
-
-  const data = eventSnap.data();
-  const seatLimit = data.seatLimit ?? null;
-  const registeredUsers: string[] = data.registeredUsers ?? [];
-
-  // Check seat limit
-  if (seatLimit !== null && registeredUsers.length >= seatLimit) {
-    throw new Error('This event is full. No seats available.');
-  }
-
   await updateDoc(doc(db, 'events', eventId), {
-    registeredUsers: arrayUnion(user.uid),
+    interestedUsers: arrayUnion(user.uid),
   });
 }
+
+// ── Unmark Interest / Unregister (removes from BOTH arrays) ──────────────────
 
 export async function unmarkInterest(eventId: string) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in.');
   await updateDoc(doc(db, 'events', eventId), {
     registeredUsers: arrayRemove(user.uid),
+    interestedUsers: arrayRemove(user.uid),
   });
+}
+
+// ── Deadline helpers ──────────────────────────────────────────────────────────
+
+export function parseDeadline(deadlineStr: string): Date | null {
+  if (!deadlineStr?.trim()) return null;
+  const d = new Date(deadlineStr);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
+export function isDeadlineWithin12Hours(deadlineStr?: string): boolean {
+  if (!deadlineStr) return false;
+  const deadline = parseDeadline(deadlineStr);
+  if (!deadline) return false;
+  const now = Date.now();
+  const diff = deadline.getTime() - now;
+  return diff > 0 && diff <= 12 * 60 * 60 * 1000;
 }

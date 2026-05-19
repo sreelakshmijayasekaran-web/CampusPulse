@@ -1,12 +1,13 @@
 // app/event-details.tsx
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Image,
   Linking,
   ScrollView,
@@ -15,11 +16,22 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Event, fetchEventById, markInterest } from '../firebase/eventService';
+import {
+  Event,
+  fetchEventById,
+  isDeadlineWithin12Hours,
+  unmarkInterest,
+} from '../firebase/eventService';
 import { auth, db } from '../firebase/firebaseConfig';
+import {
+  sendNotificationToUser,
+} from '../firebase/notificationService';
+import {
+  arrayUnion,
+  updateDoc,
+} from 'firebase/firestore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 380;
@@ -38,24 +50,25 @@ export default function EventDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [interestLoading, setInterestLoading] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [unregLoading, setUnregLoading] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
+  // Track which actions the user has taken THIS SESSION (persisted in Firestore via separate fields)
+  const [hasMarkedInterest, setHasMarkedInterest] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
-
   const currentUid = auth.currentUser?.uid;
 
-  // Parallax: poster scrolls at half speed
   const posterTranslateY = scrollY.interpolate({
     inputRange: [-HERO_HEIGHT, 0, HERO_HEIGHT],
     outputRange: [HERO_HEIGHT / 2, 0, -HERO_HEIGHT / 2],
     extrapolate: 'clamp',
   });
 
-  // Top bar fades in as user scrolls into content
   const headerOpacity = scrollY.interpolate({
     inputRange: [HERO_HEIGHT - 80, HERO_HEIGHT - 20],
     outputRange: [0, 1],
@@ -68,55 +81,198 @@ export default function EventDetails() {
       const evt = await fetchEventById(id);
       setEvent(evt);
 
-      if (evt && currentUid && evt.createdBy === currentUid) {
-        const userSnap = await getDoc(doc(db, 'users', currentUid));
-        if (
-          userSnap.exists() &&
-          userSnap.data().role === 'organizer' &&
-          userSnap.data().status === 'approved'
-        ) {
-          setIsOrganizer(true);
+      if (evt && currentUid) {
+        // Check if user is the organizer
+        if (evt.createdBy === currentUid) {
+          const userSnap = await getDoc(doc(db, 'users', currentUid));
+          if (
+            userSnap.exists() &&
+            userSnap.data().role === 'organizer' &&
+            userSnap.data().status === 'approved'
+          ) {
+            setIsOrganizer(true);
+          }
+        }
+        // Check if user has already marked interest (in interestedUsers array)
+        if (evt.interestedUsers?.includes(currentUid)) {
+          setHasMarkedInterest(true);
         }
       }
-
       setLoading(false);
     };
     load();
   }, [id]);
 
+  // User is in registeredUsers → fully registered
   const isRegistered = event?.registeredUsers?.includes(currentUid ?? '') ?? false;
+  // User is in interestedUsers → marked interest but not yet registered
+  const isInterested = event?.interestedUsers?.includes(currentUid ?? '') ?? false;
+
   const count = event?.registeredUsers?.length ?? 0;
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
+  const deadlineSoon = event?.deadline ? isDeadlineWithin12Hours(event.deadline) : false;
 
-  const handleRegister = async () => {
+  // ── MARK INTEREST ────────────────────────────────────────────────────────────
+  // Adds user to interestedUsers[] (NOT registeredUsers)
+  // Sends a deadline notification ONLY if deadline is within 12 hours
+  const handleMarkInterest = async () => {
     if (!currentUid) {
-      Alert.alert('Login required', 'Please log in to register for this event.');
+      Alert.alert('Login required', 'Please log in first.');
+      return;
+    }
+    setInterestLoading(true);
+    try {
+      // Add to interestedUsers (separate field, not registeredUsers)
+      await updateDoc(doc(db, 'events', id!), {
+        interestedUsers: arrayUnion(currentUid),
+      });
+
+      setHasMarkedInterest(true);
+      const updated = await fetchEventById(id!);
+      setEvent(updated);
+
+      // Send deadline notification ONLY if deadline is within 12 hours
+      if (event?.deadline && isDeadlineWithin12Hours(event.deadline)) {
+        await sendNotificationToUser(
+          currentUid,
+          `⏰ Deadline Soon: ${event.title}`,
+          `You marked interest in "${event.title}". Registration closes in less than 12 hours: ${event.deadline}. Register now!`,
+          { type: 'deadline_reminder', eventId: id! }
+        );
+        Alert.alert(
+          '⭐ Interest Marked!',
+          `You've marked your interest. ⚠️ Deadline is within 12 hours! Register soon.`
+        );
+      } else {
+        Alert.alert(
+          '⭐ Interest Marked!',
+          `You've marked your interest in "${event?.title}". You'll be reminded 12 hours before the deadline.`
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setInterestLoading(false);
+    }
+  };
+
+  // ── REGISTER NOW ─────────────────────────────────────────────────────────────
+  // Adds user to registeredUsers[] AND sends confirmation + deadline notification immediately
+  const handleRegisterNow = async () => {
+    if (!currentUid) {
+      Alert.alert('Login required', 'Please log in first.');
       return;
     }
     if (isFull) {
       Alert.alert('Event Full', 'Sorry, this event has reached its seat limit.');
       return;
     }
-    setActionLoading(true);
+    setRegisterLoading(true);
     try {
-      if (!isRegistered) {
-        await markInterest(id!);
-        const updated = await fetchEventById(id!);
-        setEvent(updated);
+      // Check seat limit before registering
+      const fresh = await fetchEventById(id!);
+      const freshCount = fresh?.registeredUsers?.length ?? 0;
+      const freshLimit = fresh?.seatLimit ?? null;
+      if (freshLimit !== null && freshCount >= freshLimit) {
+        Alert.alert('Event Full', 'Sorry, no seats left.');
+        setRegisterLoading(false);
+        return;
       }
+
+      // Add to registeredUsers
+      await updateDoc(doc(db, 'events', id!), {
+        registeredUsers: arrayUnion(currentUid),
+      });
+
+      const updated = await fetchEventById(id!);
+      setEvent(updated);
+
+      // 1. Send registration confirmation notification
+      await sendNotificationToUser(
+        currentUid,
+        `✅ Registered: ${event?.title}`,
+        `You've successfully registered for "${event?.title}".${event?.deadline ? ` Deadline: ${event.deadline}` : ''}`,
+        { type: 'registration_confirmed', eventId: id! }
+      );
+
+      // 2. Always send a deadline reminder notification at the same time
+      if (event?.deadline) {
+        await sendNotificationToUser(
+          currentUid,
+          `⏰ Deadline Reminder: ${event.title}`,
+          `Don't miss the registration deadline: ${event.deadline}. Make sure you've completed all steps!`,
+          { type: 'deadline_reminder', eventId: id! }
+        );
+      }
+
+      // 3. Open external registration link if provided
       if (event?.registerLink) {
         Linking.openURL(event.registerLink).catch(() =>
           Alert.alert('Error', 'Could not open the registration link.')
         );
       } else {
-        Alert.alert('✅ Registered!', 'You have been registered. The organizer will share further details soon.');
+        Alert.alert(
+          '✅ Registered!',
+          `You're now registered for "${event?.title}". The organizer will share further details soon.`
+        );
       }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
-      setActionLoading(false);
+      setRegisterLoading(false);
     }
+  };
+
+  // ── UNREGISTER ───────────────────────────────────────────────────────────────
+  const handleUnmarkInterest = async () => {
+    Alert.alert(
+      'Remove Registration',
+      'Are you sure you want to remove your registration for this event?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setUnregLoading(true);
+            try {
+              await unmarkInterest(id!);
+              const updated = await fetchEventById(id!);
+              setEvent(updated);
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            } finally {
+              setUnregLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── DELETE EVENT (organizer only) ────────────────────────────────────────────
+  const handleDeleteEvent = () => {
+    Alert.alert(
+      "🗑 Delete Event",
+      `Are you sure you want to delete this event? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'events', id!));
+              Alert.alert("Deleted", "Your event has been deleted.");
+              router.replace("/my-events");
+            } catch (err: any) {
+              Alert.alert("Error", err.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const loadRegisteredStudents = async () => {
@@ -168,7 +324,7 @@ export default function EventDetails() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── Floating top bar (appears on scroll) ── */}
+      {/* Floating top bar */}
       <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.floatingHeaderBtn}>
           <Text style={styles.floatingHeaderBtnText}>← Back</Text>
@@ -192,21 +348,13 @@ export default function EventDetails() {
           { useNativeDriver: true }
         )}
       >
-        {/* ── Hero Section ── */}
+        {/* Hero Section */}
         <View style={styles.heroContainer}>
-          {/* Parallax poster */}
           <Animated.View
-            style={[
-              styles.posterWrapper,
-              { transform: [{ translateY: posterTranslateY }] },
-            ]}
+            style={[styles.posterWrapper, { transform: [{ translateY: posterTranslateY }] }]}
           >
             {event.posterUrl ? (
-              <Image
-                source={{ uri: event.posterUrl }}
-                style={styles.posterImage}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: event.posterUrl }} style={styles.posterImage} resizeMode="cover" />
             ) : (
               <View style={styles.posterPlaceholder}>
                 <Text style={styles.posterPlaceholderText}>🎉</Text>
@@ -214,14 +362,12 @@ export default function EventDetails() {
             )}
           </Animated.View>
 
-          {/* Gradient fade at the bottom of the hero */}
           <LinearGradient
             colors={['transparent', 'rgba(18,18,18,0.6)', '#121212']}
             locations={[0.4, 0.75, 1]}
             style={styles.heroGradient}
           />
 
-          {/* Floating Back + Edit buttons ON the poster */}
           <View style={styles.heroButtons}>
             <TouchableOpacity style={styles.heroPillBtn} onPress={() => router.back()}>
               <Text style={styles.heroPillBtnText}>← Back</Text>
@@ -236,7 +382,6 @@ export default function EventDetails() {
             )}
           </View>
 
-          {/* Category badge + Title sit at the bottom of the hero */}
           <View style={styles.heroTextBlock}>
             {event.category && (
               <View style={styles.badge}>
@@ -247,8 +392,17 @@ export default function EventDetails() {
           </View>
         </View>
 
-        {/* ── Content below hero ── */}
+        {/* Content below hero */}
         <View style={styles.content}>
+
+          {/* Deadline warning banner */}
+          {deadlineSoon && !isRegistered && (
+            <View style={styles.deadlineBanner}>
+              <Text style={styles.deadlineBannerText}>
+                ⏰ Registration closes in less than 12 hours! Deadline: {event.deadline}
+              </Text>
+            </View>
+          )}
 
           {/* Info Card */}
           <View style={styles.infoCard}>
@@ -320,6 +474,11 @@ export default function EventDetails() {
                   )}
                 </View>
               )}
+
+              {/* Delete Event button */}
+              <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
+                <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -329,32 +488,96 @@ export default function EventDetails() {
             {event.description?.trim() ? event.description : 'No description provided yet.'}
           </Text>
 
-          {/* Register CTA */}
+          {/* ── CTA Section ── */}
           {isRegistered ? (
-            <View style={styles.registeredBadge}>
-              <Text style={styles.registeredBadgeText}>✅ You're Registered</Text>
+            // Already fully registered
+            <View>
+              <View style={styles.registeredBadge}>
+                <Text style={styles.registeredBadgeText}>✅ You're Registered</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.unregisterButton}
+                onPress={handleUnmarkInterest}
+                disabled={unregLoading}
+              >
+                {unregLoading
+                  ? <ActivityIndicator color="#ef4444" />
+                  : <Text style={styles.unregisterButtonText}>✕ Remove Registration</Text>
+                }
+              </TouchableOpacity>
             </View>
           ) : isFull ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>🔴 Registrations Closed — Event Full</Text>
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={handleRegister}
-              disabled={actionLoading}
-            >
-              {actionLoading
-                ? <ActivityIndicator color="white" />
-                : <Text style={styles.registerButtonText}>Register Now →</Text>
-              }
-            </TouchableOpacity>
-          )}
+            // Show both buttons
+            <View style={styles.ctaContainer}>
+              {/* Mark Interest button — only if not yet interested */}
+              {!isInterested && (
+                <TouchableOpacity
+                  style={[
+                    styles.interestButton,
+                    deadlineSoon && styles.interestButtonUrgent,
+                  ]}
+                  onPress={handleMarkInterest}
+                  disabled={interestLoading}
+                >
+                  {interestLoading
+                    ? <ActivityIndicator color="white" />
+                    : (
+                      <View style={styles.btnInner}>
+                        <Text style={styles.interestButtonText}>
+                          {deadlineSoon ? '⚡ Mark Interest — Closing Soon!' : '⭐ Mark Interest'}
+                        </Text>
+                        <Text style={styles.interestButtonSub}>
+                          {deadlineSoon
+                            ? 'You will get an immediate deadline alert'
+                            : 'Get a reminder 12h before deadline'}
+                        </Text>
+                      </View>
+                    )
+                  }
+                </TouchableOpacity>
+              )}
 
-          {!event.registerLink && !isRegistered && !isFull && (
-            <Text style={styles.noLinkNote}>
-              * No external form — tapping Register marks your interest directly.
-            </Text>
+              {/* Already marked interest — show badge */}
+              {isInterested && (
+                <View style={styles.interestedBadge}>
+                  <Text style={styles.interestedBadgeText}>⭐ Interest Marked</Text>
+                </View>
+              )}
+
+              {/* Register Now button — always shown when not registered */}
+              <TouchableOpacity
+                style={[
+                  styles.registerButton,
+                  deadlineSoon && styles.registerButtonUrgent,
+                ]}
+                onPress={handleRegisterNow}
+                disabled={registerLoading}
+              >
+                {registerLoading
+                  ? <ActivityIndicator color="white" />
+                  : (
+                    <View style={styles.btnInner}>
+                      <Text style={styles.registerButtonText}>
+                        {deadlineSoon ? '🔥 Register Now — Closing Soon!' : 'Register Now →'}
+                      </Text>
+                      <Text style={styles.registerButtonSub}>
+                        Instant confirmation + deadline reminder
+                      </Text>
+                    </View>
+                  )
+                }
+              </TouchableOpacity>
+
+              {!event.registerLink && (
+                <Text style={styles.noLinkNote}>
+                  * Registering adds you to the event directly in the app.
+                </Text>
+              )}
+            </View>
           )}
         </View>
       </Animated.ScrollView>
@@ -380,158 +603,87 @@ const styles = StyleSheet.create({
   errorText: { color: 'white', fontSize: 18, marginBottom: 12 },
   backLink: { color: '#4f46e5', fontSize: 15 },
 
-  // ── Floating header (scrolled state) ──────────────────────────────────────
   floatingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 52,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: 52, paddingHorizontal: 20, paddingBottom: 12,
     backgroundColor: '#121212',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a2a',
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#2a2a2a',
   },
   floatingHeaderBtn: { paddingVertical: 4, paddingHorizontal: 2 },
   floatingHeaderBtnText: { color: '#4f46e5', fontSize: 15, fontWeight: '600' },
 
-  // ── Hero ──────────────────────────────────────────────────────────────────
   heroContainer: {
-    height: HERO_HEIGHT,
-    width: SCREEN_WIDTH,
-    overflow: 'hidden',
-    position: 'relative',
+    height: HERO_HEIGHT, width: SCREEN_WIDTH, overflow: 'hidden', position: 'relative',
   },
-  posterWrapper: {
-    position: 'absolute',
-    top: -40,           // extra so parallax has room to move
-    left: 0,
-    right: 0,
-    bottom: -40,
-  },
-  posterImage: {
-    width: '100%',
-    height: '100%',
-  },
+  posterWrapper: { position: 'absolute', top: -40, left: 0, right: 0, bottom: -40 },
+  posterImage: { width: '100%', height: '100%' },
   posterPlaceholder: {
-    flex: 1,
-    backgroundColor: '#1e1b4b',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, backgroundColor: '#1e1b4b', justifyContent: 'center', alignItems: 'center',
   },
   posterPlaceholderText: { fontSize: 64 },
-
   heroGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: HERO_HEIGHT * 0.75,
+    position: 'absolute', left: 0, right: 0, bottom: 0, height: HERO_HEIGHT * 0.75,
   },
-
-  // Floating Back / Edit pills sitting on the poster
   heroButtons: {
-    position: 'absolute',
-    top: 52,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    zIndex: 10,
+    position: 'absolute', top: 52, left: 16, right: 16,
+    flexDirection: 'row', justifyContent: 'space-between', zIndex: 10,
   },
   heroPillBtn: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backdropFilter: 'blur(8px)',  // works on iOS; no-op on Android (still looks good)
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
   },
   heroPillBtnText: { color: 'white', fontSize: 14, fontWeight: '600' },
-
-  // Category badge + title at the base of the hero
-  heroTextBlock: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    zIndex: 10,
-  },
+  heroTextBlock: { position: 'absolute', bottom: 20, left: 20, right: 20, zIndex: 10 },
   badge: {
-    backgroundColor: 'rgba(79,70,229,0.85)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 10,
-    marginBottom: 10,
+    backgroundColor: 'rgba(79,70,229,0.85)', alignSelf: 'flex-start',
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, marginBottom: 10,
   },
   badgeText: { color: '#e0e7ff', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   title: {
-    color: 'white',
-    fontSize: 26,
-    fontWeight: 'bold',
-    lineHeight: 34,
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+    color: 'white', fontSize: 26, fontWeight: 'bold', lineHeight: 34,
+    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
   },
 
-  // ── Scrollable content ────────────────────────────────────────────────────
   content: { paddingHorizontal: 20, paddingTop: 20 },
 
+  deadlineBanner: {
+    backgroundColor: '#2a1500',
+    borderWidth: 1,
+    borderColor: '#f97316',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  deadlineBannerText: { color: '#f97316', fontSize: 13, fontWeight: '600', lineHeight: 20 },
+
   infoCard: {
-    backgroundColor: '#1e1e1e',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    gap: 16,
+    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 20, marginBottom: 20, gap: 16,
   },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   infoIcon: { fontSize: 22 },
   infoLabel: {
-    color: '#888',
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    color: '#888', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6,
   },
   infoValue: { color: 'white', fontSize: 15, fontWeight: '500', marginTop: 2 },
 
   countCard: {
-    backgroundColor: '#1e1b4b',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#4f46e5',
+    backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20, alignItems: 'center',
+    marginBottom: 24, borderWidth: 1, borderColor: '#4f46e5',
   },
   countNumber: { color: '#818cf8', fontSize: 48, fontWeight: 'bold' },
   countLabel: { color: '#a5b4fc', fontSize: 15, marginTop: 4 },
   seatBadge: {
-    marginTop: 10,
-    backgroundColor: '#052e16',
-    borderWidth: 1,
-    borderColor: '#22c55e',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    marginTop: 10, backgroundColor: '#052e16', borderWidth: 1, borderColor: '#22c55e',
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
   },
   seatBadgeFull: { backgroundColor: '#2a0a0a', borderColor: '#ef4444' },
   seatBadgeText: { color: '#22c55e', fontWeight: '700', fontSize: 13 },
   seatBadgeTextFull: { color: '#ef4444' },
 
   organizerSection: {
-    backgroundColor: '#1e1e1e',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
+    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 16, marginBottom: 24,
   },
   studentsToggle: { flexDirection: 'row', alignItems: 'center' },
   studentsToggleText: { color: '#4f46e5', fontWeight: '700', fontSize: 15 },
@@ -540,12 +692,8 @@ const styles = StyleSheet.create({
   studentCard: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14 },
   studentRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   studentAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#22c55e',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 38, height: 38, borderRadius: 19, backgroundColor: '#22c55e',
+    justifyContent: 'center', alignItems: 'center',
   },
   avatarText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   studentName: { color: 'white', fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
@@ -555,33 +703,69 @@ const styles = StyleSheet.create({
   sectionHeading: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   description: { color: '#cccccc', fontSize: 15, lineHeight: 24, marginBottom: 28 },
 
-  registerButton: {
-    backgroundColor: '#22c55e',
-    padding: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  registerButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  registeredBadge: {
-    backgroundColor: '#052e16',
+  // ── CTA ──
+  ctaContainer: { gap: 12, marginBottom: 10 },
+
+  btnInner: { alignItems: 'center', gap: 3 },
+
+  interestButton: {
+    backgroundColor: '#1e1b4b',
     borderWidth: 1.5,
-    borderColor: '#22c55e',
+    borderColor: '#4f46e5',
     padding: 16,
     borderRadius: 14,
     alignItems: 'center',
-    marginBottom: 10,
+  },
+  interestButtonUrgent: {
+    backgroundColor: '#2a1500',
+    borderColor: '#f97316',
+  },
+  interestButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  interestButtonSub: { color: '#888', fontSize: 11, marginTop: 2 },
+
+  interestedBadge: {
+    backgroundColor: '#1e1b4b', borderWidth: 1.5, borderColor: '#4f46e5',
+    padding: 14, borderRadius: 14, alignItems: 'center',
+  },
+  interestedBadgeText: { color: '#818cf8', fontSize: 15, fontWeight: 'bold' },
+
+  registerButton: {
+    backgroundColor: '#22c55e', padding: 16, borderRadius: 14, alignItems: 'center',
+  },
+  registerButtonUrgent: { backgroundColor: '#f97316' },
+  registerButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  registerButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 2 },
+
+  registeredBadge: {
+    backgroundColor: '#052e16', borderWidth: 1.5, borderColor: '#22c55e',
+    padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10,
   },
   registeredBadgeText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold' },
+
+  unregisterButton: {
+    borderWidth: 1, borderColor: '#ef4444', padding: 12,
+    borderRadius: 12, alignItems: 'center', marginBottom: 10,
+  },
+  unregisterButtonText: { color: '#ef4444', fontSize: 14, fontWeight: '600' },
+
   fullBadge: {
-    backgroundColor: '#2a0a0a',
-    borderWidth: 1.5,
-    borderColor: '#ef4444',
-    padding: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#2a0a0a', borderWidth: 1.5, borderColor: '#ef4444',
+    padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10,
   },
   fullBadgeText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
   noLinkNote: { color: '#555', fontSize: 12, textAlign: 'center' },
+
+  deleteEventBtn: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#3a1c1c',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2a0a0a',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  deleteEventBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
 });

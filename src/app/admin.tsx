@@ -1,4 +1,5 @@
 // app/admin.tsx
+// Updated: sends broadcast notification to all students when admin APPROVES an event.
 
 import { useEffect, useState } from 'react';
 import {
@@ -9,6 +10,7 @@ import { router } from 'expo-router';
 import { auth, db } from '../firebase/firebaseConfig';
 import { collection, getDocs, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { fetchAllEvents, updateEventStatus, Event } from '../firebase/eventService';
+import { broadcastNewEventToStudents } from '../firebase/notificationService';
 
 type UserProfile = {
   id: string;
@@ -64,10 +66,9 @@ export default function AdminPanel() {
     }
   };
 
-  // Fetch full profiles of registered users for an event
   const loadRegisteredUsers = async (event: Event) => {
     if (!event.registeredUsers?.length) return;
-    if (registeredUsers[event.id]) return; // already loaded
+    if (registeredUsers[event.id]) return;
 
     try {
       const profiles: UserProfile[] = [];
@@ -104,11 +105,25 @@ export default function AdminPanel() {
     }
   };
 
-  const handleEventAction = async (eventId: string, status: 'approved' | 'rejected') => {
-    setActionLoading(eventId);
+  const handleEventAction = async (event: Event, status: 'approved' | 'rejected') => {
+    setActionLoading(event.id);
     try {
-      await updateEventStatus(eventId, status);
-      setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status } : e)));
+      await updateEventStatus(event.id, status);
+      setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, status } : e)));
+
+      // ── Notify all students when an event is APPROVED ─────────────────
+      if (status === 'approved') {
+        try {
+          await broadcastNewEventToStudents(
+            event.id,
+            event.title,
+            event.createdBy,
+            event.club
+          );
+        } catch (notifErr) {
+          console.warn('Notification broadcast failed (non-critical):', notifErr);
+        }
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
@@ -125,7 +140,6 @@ export default function AdminPanel() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backText}>← Back</Text>
@@ -134,7 +148,6 @@ export default function AdminPanel() {
         <Text style={styles.subheading}>CampusPulse Control Centre</Text>
       </View>
 
-      {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{pendingOrgs.length}</Text>
@@ -150,7 +163,6 @@ export default function AdminPanel() {
         </View>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabRow}>
         <TouchableOpacity style={[styles.tab, tab === 'organizers' && styles.tabActive]} onPress={() => setTab('organizers')}>
           <Text style={[styles.tabText, tab === 'organizers' && styles.tabTextActive]}>
@@ -164,7 +176,6 @@ export default function AdminPanel() {
         </TouchableOpacity>
       </View>
 
-      {/* Organizers tab */}
       {tab === 'organizers' && (
         <View style={styles.section}>
           {organizers.length === 0 ? (
@@ -202,7 +213,6 @@ export default function AdminPanel() {
         </View>
       )}
 
-      {/* Events tab */}
       {tab === 'events' && (
         <View style={styles.section}>
           {events.length === 0 ? (
@@ -221,17 +231,23 @@ export default function AdminPanel() {
                 </View>
 
                 {event.status === 'pending' && (
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => handleEventAction(event.id, 'approved')} disabled={actionLoading === event.id}>
-                      {actionLoading === event.id ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.actionBtnText}>✅ Approve</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleEventAction(event.id, 'rejected')} disabled={actionLoading === event.id}>
-                      <Text style={styles.actionBtnText}>❌ Reject</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <>
+                    <View style={styles.notifNote}>
+                      <Text style={styles.notifNoteText}>
+                        📣 Approving will notify all students
+                      </Text>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => handleEventAction(event, 'approved')} disabled={actionLoading === event.id}>
+                        {actionLoading === event.id ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.actionBtnText}>✅ Approve & Notify</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => handleEventAction(event, 'rejected')} disabled={actionLoading === event.id}>
+                        <Text style={styles.actionBtnText}>❌ Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
 
-                {/* Registered students section */}
                 <TouchableOpacity style={styles.registeredToggle} onPress={() => toggleEvent(event)}>
                   <Text style={styles.registeredToggleText}>
                     👥 {event.registeredUsers?.length || 0} Registered Student{event.registeredUsers?.length !== 1 ? 's' : ''}
@@ -246,7 +262,7 @@ export default function AdminPanel() {
                     ) : registeredUsers[event.id].length === 0 ? (
                       <Text style={styles.cardSub}>No students yet.</Text>
                     ) : (
-                      registeredUsers[event.id].map((u, i) => (
+                      registeredUsers[event.id].map((u) => (
                         <View key={u.id} style={styles.studentCard}>
                           <View style={styles.studentHeader}>
                             <View style={styles.studentAvatar}>
@@ -312,7 +328,12 @@ const styles = StyleSheet.create({
   cardName: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   cardSub: { color: '#888', fontSize: 13, marginBottom: 2 },
   cardDesc: { color: '#666', fontSize: 13, marginTop: 6, lineHeight: 18 },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  notifNote: {
+    backgroundColor: '#1a1a2e', borderRadius: 8, padding: 8, marginTop: 10,
+    borderWidth: 1, borderColor: '#4f46e5',
+  },
+  notifNoteText: { color: '#818cf8', fontSize: 12, fontWeight: '600' },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   approveBtn: { flex: 1, backgroundColor: '#052e16', borderWidth: 1, borderColor: '#22c55e', padding: 10, borderRadius: 10, alignItems: 'center' },
   rejectBtn: { flex: 1, backgroundColor: '#2a0a0a', borderWidth: 1, borderColor: '#ef4444', padding: 10, borderRadius: 10, alignItems: 'center' },
   actionBtnText: { color: 'white', fontWeight: '700', fontSize: 14 },
