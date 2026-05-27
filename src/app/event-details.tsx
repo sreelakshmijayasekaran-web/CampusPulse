@@ -113,6 +113,10 @@ export default function EventDetails() {
   const count = event?.registeredUsers?.length ?? 0;
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
+  const deadlinePassed =
+  event?.deadline
+    ? new Date(event.deadline) < new Date()
+    : false;
   const deadlineSoon = event?.deadline ? isDeadlineWithin12Hours(event.deadline) : false;
 
   // ── MARK INTEREST ────────────────────────────────────────────────────────────
@@ -327,6 +331,23 @@ export default function EventDetails() {
     }
     setShowStudents((prev) => !prev);
   };
+  const formatDateTime = (dateTime: string) => {
+
+  if (!dateTime) return "";
+
+  const date = new Date(dateTime);
+
+  return date.toLocaleString([], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+    
 
   if (loading) {
     return (
@@ -421,6 +442,7 @@ export default function EventDetails() {
 
         {/* Content below hero */}
         <View style={styles.content}>
+          
 
           {/* Deadline warning banner */}
           {deadlineSoon && !isRegistered && (
@@ -434,7 +456,7 @@ export default function EventDetails() {
           {/* Info Card */}
           <View style={styles.infoCard}>
             <InfoRow icon="📍" label="Venue" value={event.venue} />
-            <InfoRow icon="🕒" label="Date & Time" value={event.time} />
+            <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)}/>
             <InfoRow icon="🏷" label="Organised by" value={event.club} />
             {event.deadline && (
               <InfoRow icon="⏰" label="Registration Deadline" value={event.deadline} />
@@ -533,7 +555,14 @@ export default function EventDetails() {
                 }
               </TouchableOpacity>
             </View>
-          ) : isFull ? (
+            ) : deadlinePassed ? (
+              <View style={styles.fullBadge}>
+                  <Text style={styles.fullBadgeText}>
+                      ⛔ Registration Deadline Passed
+                  </Text>
+              </View>
+            ) 
+           : isFull ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>🔴 Registrations Closed — Event Full</Text>
             </View>

@@ -116,6 +116,22 @@ const trendingEvents = [...filteredEvents].sort(
     (b.registeredUsers?.length || 0) -
     (a.registeredUsers?.length || 0)
 );
+
+  const formatDateTime = (dateTime: string) => {
+
+  if (!dateTime) return "";
+
+  const date = new Date(dateTime);
+
+  return date.toLocaleString([], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
 
@@ -284,7 +300,7 @@ const trendingEvents = [...filteredEvents].sort(
           </Text>
 
           <Text style={styles.posterSub}>
-            🕒 {event.time}
+            🕒 {formatDateTime(event.time)}
           </Text>
 
           <Text style={styles.posterCount}>
@@ -336,7 +352,7 @@ const trendingEvents = [...filteredEvents].sort(
           </Text>
 
           <Text style={styles.posterSub}>
-            🕒 {event.time}
+            🕒 {formatDateTime(event.time)}
           </Text>
 
           <Text style={styles.posterCount}>
@@ -392,7 +408,7 @@ const trendingEvents = [...filteredEvents].sort(
           </Text>
 
           <Text style={styles.posterSub}>
-            🕒 {event.time}
+            🕒 {formatDateTime(event.time)}
           </Text>
 
           <Text style={styles.posterCount}>

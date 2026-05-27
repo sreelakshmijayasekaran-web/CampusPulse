@@ -122,7 +122,7 @@ export default function AdminPanel() {
       await updateEventStatus(event.id, status);
       setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, status } : e)));
 
-      if (status === 'approved') {
+      if (status === 'approved' && event.status !== 'approved') {
         try {
           await broadcastNewEventToStudents(
             event.id,

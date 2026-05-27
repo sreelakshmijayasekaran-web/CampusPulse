@@ -158,6 +158,9 @@ export default function CreateEvent() {
         deadline,
         seatLimit: noLimit ? null : Number(seatLimit),
         posterUrl: posterUrl.trim() || null,
+
+        isApproved: false,
+        status: 'pending',
       };
 
       if (isEditMode && editId) {
@@ -174,12 +177,7 @@ export default function CreateEvent() {
         setNotifying(true);
         try {
           const user = auth.currentUser;
-          await broadcastNewEventToStudents(
-            newEventId,
-            title,
-            user?.uid ?? '',
-            club
-          );
+          
         } catch (notifErr) {
           console.warn('Notification broadcast failed (non-critical):', notifErr);
         } finally {
