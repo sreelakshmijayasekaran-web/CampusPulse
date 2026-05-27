@@ -2,7 +2,10 @@
 // Updated to show history sections for students and organizers.
 // - All users: "Events Participated" section
 // - Organizers: additional "My Posted Events" section
+// - All users: "Send Feedback" button
 
+import { router } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,10 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { Event, fetchMyEvents, fetchMyRegisteredEvents } from '../firebase/eventService';
 import { auth, db } from '../firebase/firebaseConfig';
-import { fetchMyRegisteredEvents, fetchMyEvents, Event } from '../firebase/eventService';
 
 export default function Profile() {
   const [loading, setLoading] = useState(true);
@@ -34,11 +35,9 @@ export default function Profile() {
           const data = snap.data();
           setUserData(data);
 
-          // Fetch participated events for everyone
           const registered = await fetchMyRegisteredEvents();
           setRegisteredEvents(registered);
 
-          // Fetch posted events only for organizers
           if (data.role === 'organizer') {
             const posted = await fetchMyEvents();
             setPostedEvents(posted);
@@ -107,7 +106,7 @@ export default function Profile() {
         <ProfileRow label="College" value={userData.college || 'Not added'} />
       </View>
 
-      {/* ── HISTORY SECTIONS ──────────────────────────────────────────────── */}
+      {/* ── HISTORY SECTIONS ── */}
 
       {/* Organizer: My Posted Events */}
       {isOrganizer && (
@@ -156,30 +155,53 @@ export default function Profile() {
         <Text style={styles.historySectionArrow}>›</Text>
       </TouchableOpacity>
 
-      {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
+      {/* ── ACTIONS ── */}
 
       <View style={styles.divider} />
 
-      <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/settings')}>
+      {/* Send Feedback */}
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => router.push('/feedback')}
+      >
+        <Text style={styles.actionButtonIcon}>💬</Text>
+        <Text style={styles.actionButtonText}>Send Feedback</Text>
+        <Text style={styles.actionButtonArrow}>›</Text>
+      </TouchableOpacity>
+
+      {/* Settings */}
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => router.push('/settings')}
+      >
         <Text style={styles.actionButtonIcon}>⚙️</Text>
         <Text style={styles.actionButtonText}>Settings</Text>
         <Text style={styles.actionButtonArrow}>›</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/help')}>
+      {/* Help */}
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => router.push('/help')}
+      >
         <Text style={styles.actionButtonIcon}>❓</Text>
         <Text style={styles.actionButtonText}>Help</Text>
         <Text style={styles.actionButtonArrow}>›</Text>
       </TouchableOpacity>
 
+      {/* Admin Panel — only for admins */}
       {userData.role === 'admin' && (
-        <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/admin')}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push('/admin')}
+        >
           <Text style={styles.actionButtonIcon}>🛡</Text>
           <Text style={styles.actionButtonText}>Admin Panel</Text>
           <Text style={styles.actionButtonArrow}>›</Text>
         </TouchableOpacity>
       )}
 
+      {/* Log Out */}
       <TouchableOpacity
         style={[styles.actionButton, styles.logoutButton]}
         onPress={handleLogout}
