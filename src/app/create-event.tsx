@@ -26,6 +26,7 @@ export default function CreateEvent() {
 
   const [title, setTitle] = useState('');
   const [venue, setVenue] = useState('');
+  const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [club, setClub] = useState('');
   const [category, setCategory] = useState('');
@@ -56,7 +57,13 @@ export default function CreateEvent() {
         if (event) {
           setTitle(event.title ?? '');
           setVenue(event.venue ?? '');
-          setTime(event.time ?? '');
+          if (event.time?.includes('T')) {
+  const [savedDate, savedTime] = event.time.split('T');
+  setDate(savedDate);
+  setTime(savedTime);
+} else {
+  setTime(event.time ?? '');
+}
           setClub(event.club ?? '');
           setCategory(event.category ?? '');
           setDescription(event.description ?? '');
@@ -122,7 +129,14 @@ export default function CreateEvent() {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !venue.trim() || !time.trim() || !club.trim() || !category) {
+    if (
+  !title.trim() ||
+  !venue.trim() ||
+  !date.trim() ||
+  !time.trim() ||
+  !club.trim() ||
+  !category
+) {
       Alert.alert('Missing fields', 'Please fill in all required fields and select a category.');
       return;
     }
@@ -136,7 +150,7 @@ export default function CreateEvent() {
       const eventData = {
         title,
         venue,
-        time,
+        time: `${date}T${time}`,
         club,
         category,
         description,
@@ -272,8 +286,23 @@ export default function CreateEvent() {
       <Text style={styles.label}>Venue *</Text>
       <TextInput placeholder="e.g. Seminar Hall" placeholderTextColor="#555" style={styles.input} value={venue} onChangeText={setVenue} />
 
-      <Text style={styles.label}>Date & Time *</Text>
-      <TextInput placeholder="e.g. 10:00 AM, 14 Feb 2026" placeholderTextColor="#555" style={styles.input} value={time} onChangeText={setTime} />
+      <Text style={styles.label}>Event Date *</Text>
+<TextInput
+  placeholder="2026-05-27"
+  placeholderTextColor="#555"
+  style={styles.input}
+  value={date}
+  onChangeText={setDate}
+/>
+
+<Text style={styles.label}>Event Time *</Text>
+<TextInput
+  placeholder="10:00"
+  placeholderTextColor="#555"
+  style={styles.input}
+  value={time}
+  onChangeText={setTime}
+/>
 
       <Text style={styles.label}>Club / Organizer *</Text>
       <TextInput placeholder="e.g. IEDC, CSE Dept" placeholderTextColor="#555" style={styles.input} value={club} onChangeText={setClub} />

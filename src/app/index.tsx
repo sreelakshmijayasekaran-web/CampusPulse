@@ -81,7 +81,41 @@ export default function HomeScreen() {
       selectedCategory === 'All' || event.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+  /* ---------------- EVENT CATEGORIES ---------------- */
 
+const now = new Date();
+
+const happeningToday = filteredEvents.filter((event) => {
+  if (!event.time) return false;
+  console.log(event.time);
+
+  const eventDate = new Date(event.time);
+
+  return (
+    eventDate.toDateString() === now.toDateString()
+  );
+});
+
+const upcomingEvents = filteredEvents.filter((event) => {
+  if (!event.time?.includes('T')) return false;
+
+  const eventDate = new Date(event.time);
+
+  return eventDate > now;
+});
+
+const recentlyHappened = filteredEvents.filter((event) => {
+  if (!event.time?.includes('T')) return false;
+
+  const eventDate = new Date(event.time);
+
+  return eventDate < now;
+});
+const trendingEvents = [...filteredEvents].sort(
+  (a, b) =>
+    (b.registeredUsers?.length || 0) -
+    (a.registeredUsers?.length || 0)
+);
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
 
@@ -208,77 +242,234 @@ export default function HomeScreen() {
         {search.length > 0 ? ` · "${search}"` : ''}
       </Text>
 
-      {/* EVENTS */}
-      {loadingEvents ? (
-        <ActivityIndicator color="#4f46e5" style={{ marginTop: 30 }} />
-      ) : filteredEvents.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyEmoji}>🔎</Text>
-          <Text style={styles.emptyText}>No events found</Text>
-          <Text style={styles.emptySubtext}>Try a different search or category</Text>
+      {/* ⚡ HAPPENING TODAY */}
+
+<Text style={styles.subheading}>⚡ Happening Today</Text>
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.posterRow}
+>
+  {happeningToday.map((event) => {
+    const taken = event.registeredUsers?.length ?? 0;
+
+    return (
+      <TouchableOpacity
+        key={event.id}
+        style={styles.posterCard}
+        onPress={() => router.push(`/event-details?id=${event.id}`)}
+        activeOpacity={0.85}
+      >
+
+        {event.posterUrl ? (
+          <Image
+            source={{ uri: event.posterUrl }}
+            style={styles.posterImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
+          </View>
+        )}
+
+        <View style={styles.posterBadge}>
+          <Text style={styles.posterBadgeText}>LIVE</Text>
         </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.posterRow}
+
+        <View style={styles.posterInfo}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {event.title}
+          </Text>
+
+          <Text style={styles.posterSub}>
+            🕒 {event.time}
+          </Text>
+
+          <Text style={styles.posterCount}>
+            👥 {taken} registered
+          </Text>
+        </View>
+
+      </TouchableOpacity>
+    );
+  })}
+</ScrollView>
+
+
+{/* 🚀 UPCOMING EVENTS */}
+
+<Text style={styles.subheading}>🚀 Upcoming Events</Text>
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.posterRow}
+>
+  {upcomingEvents.map((event) => {
+    const taken = event.registeredUsers?.length ?? 0;
+
+    return (
+      <TouchableOpacity
+        key={event.id}
+        style={styles.posterCard}
+        onPress={() => router.push(`/event-details?id=${event.id}`)}
+        activeOpacity={0.85}
+      >
+
+        {event.posterUrl ? (
+          <Image
+            source={{ uri: event.posterUrl }}
+            style={styles.posterImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
+          </View>
+        )}
+
+        <View style={styles.posterInfo}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {event.title}
+          </Text>
+
+          <Text style={styles.posterSub}>
+            🕒 {event.time}
+          </Text>
+
+          <Text style={styles.posterCount}>
+            👥 {taken} registered
+          </Text>
+        </View>
+
+      </TouchableOpacity>
+    );
+  })}
+</ScrollView>
+
+
+{/* 🔥 TRENDING EVENTS */}
+
+<Text style={styles.subheading}>🔥 Trending Events</Text>
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.posterRow}
+>
+  {trendingEvents.map((event) => {
+    const taken = event.registeredUsers?.length ?? 0;
+
+    return (
+      <TouchableOpacity
+        key={event.id}
+        style={styles.posterCard}
+        onPress={() => router.push(`/event-details?id=${event.id}`)}
+        activeOpacity={0.85}
+      >
+
+        {event.posterUrl ? (
+          <Image
+            source={{ uri: event.posterUrl }}
+            style={styles.posterImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
+          </View>
+        )}
+
+        <View style={styles.posterBadge}>
+          <Text style={styles.posterBadgeText}>TRENDING</Text>
+        </View>
+
+        <View style={styles.posterInfo}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {event.title}
+          </Text>
+
+          <Text style={styles.posterSub}>
+            🕒 {event.time}
+          </Text>
+
+          <Text style={styles.posterCount}>
+            🔥 {taken} registrations
+          </Text>
+        </View>
+
+      </TouchableOpacity>
+    );
+  })}
+</ScrollView>
+
+
+{/* 🎉 RECENTLY HAPPENED */}
+
+<Text style={styles.subheading}>🎉 Recently Happened</Text>
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.posterRow}
+>
+  {recentlyHappened.map((event) => {
+
+    return (
+      <TouchableOpacity
+        key={event.id}
+        style={[styles.posterCard, { opacity: 0.7 }]}
+        activeOpacity={1}
+      >
+
+        {event.posterUrl ? (
+          <Image
+            source={{ uri: event.posterUrl }}
+            style={styles.posterImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
+          </View>
+        )}
+
+        <View
+          style={[
+            styles.posterBadge,
+            { backgroundColor: '#111' }
+          ]}
         >
-          {filteredEvents.map((event) => {
-            const taken = event.registeredUsers?.length ?? 0;
-            const isFull = event.seatLimit != null && taken >= event.seatLimit;
-            return (
-              <TouchableOpacity
-                key={event.id}
-                style={styles.posterCard}
-                onPress={() => router.push(`/event-details?id=${event.id}`)}
-                activeOpacity={0.85}
-              >
-                {/* Poster image or placeholder */}
-                {event.posterUrl ? (
-                  <Image
-                    source={{ uri: event.posterUrl }}
-                    style={styles.posterImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.posterPlaceholder}>
-                    <Text style={styles.posterPlaceholderEmoji}>📅</Text>
-                    <Text style={styles.posterPlaceholderTitle} numberOfLines={3}>
-                      {event.title}
-                    </Text>
-                    <Text style={styles.posterPlaceholderClub} numberOfLines={1}>
-                      {event.club}
-                    </Text>
-                  </View>
-                )}
+          <Text style={styles.posterBadgeText}>
+            ENDED
+          </Text>
+        </View>
 
-                {/* Category badge overlay on top-left */}
-                {event.category ? (
-                  <View style={styles.posterBadge}>
-                    <Text style={styles.posterBadgeText}>{event.category}</Text>
-                  </View>
-                ) : null}
+        <View style={styles.posterInfo}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {event.title}
+          </Text>
 
-                {/* Full badge on top-right */}
-                {isFull ? (
-                  <View style={styles.posterFullBadge}>
-                    <Text style={styles.posterFullBadgeText}>FULL</Text>
-                  </View>
-                ) : null}
+          <Text style={styles.posterSub}>
+            Event completed
+          </Text>
 
-                {/* Info below poster */}
-                <View style={styles.posterInfo}>
-                  <Text style={styles.posterTitle} numberOfLines={2}>{event.title}</Text>
-                  <Text style={styles.posterSub} numberOfLines={1}>🕒 {event.time}</Text>
-                  {taken > 0 && (
-                    <Text style={styles.posterCount}>👥 {taken} registered</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+          <Text
+            style={[
+              styles.posterCount,
+              { color: '#999' }
+            ]}
+          >
+            Registration Closed
+          </Text>
+        </View>
+
+      </TouchableOpacity>
+    );
+  })}
+</ScrollView>
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -288,7 +479,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#f5f5f5',
     paddingTop: 60,
     paddingHorizontal: 20,
   },
@@ -297,23 +488,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
   },
 
-  // Notification bell
   notifButton: {
     position: 'relative',
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#ff5a1f',
+    borderRadius: 14,
   },
 
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#ef4444',
+    top: -2,
+    right: -2,
+    backgroundColor: '#111',
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -336,19 +528,20 @@ const styles = StyleSheet.create({
   rightHeader: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 38,
+    width: 42,
   },
 
   heading: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#111',
+    letterSpacing: 0.5,
   },
 
   welcomeText: {
-    color: '#888',
+    color: '#666',
     fontSize: 13,
-    marginTop: 2,
+    marginTop: 4,
   },
 
   authRow: {
@@ -357,63 +550,66 @@ const styles = StyleSheet.create({
   },
 
   signupButton: {
-    backgroundColor: '#22c55e',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    backgroundColor: '#ff5a1f',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
   },
 
   loginButton: {
-    backgroundColor: '#4f46e5',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
   },
 
   buttonText: {
-    color: 'white',
-    fontSize: 14,
-    marginTop: -10,
-    fontWeight: 'bold',
+    color: '#111',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   adminButton: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#4f46e5',
-    padding: 12,
-    borderRadius: 12,
+    borderColor: '#ff5a1f',
+    padding: 14,
+    borderRadius: 18,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
 
   adminButtonText: {
-    color: '#818cf8',
+    color: '#ff5a1f',
     fontWeight: '700',
     fontSize: 15,
   },
 
   pendingNotice: {
-    backgroundColor: '#2a1f00',
+    backgroundColor: '#fff4ed',
     borderWidth: 1,
-    borderColor: '#f59e0b',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    borderColor: '#ffb088',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 18,
   },
 
   pendingText: {
-    color: '#f59e0b',
+    color: '#ff5a1f',
     fontSize: 13,
   },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e1e1e',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#ececec',
   },
 
   searchIcon: {
@@ -423,39 +619,42 @@ const styles = StyleSheet.create({
 
   searchInput: {
     flex: 1,
-    color: 'white',
+    color: '#111',
     fontSize: 15,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
 
   clearBtn: {
-    color: '#666',
+    color: '#999',
     fontSize: 16,
     paddingLeft: 8,
   },
 
   categoryScroll: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
 
   categoryContent: {
-    gap: 8,
+    gap: 10,
     paddingRight: 8,
   },
 
   categoryTag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#ececec',
   },
 
   categoryTagActive: {
-    backgroundColor: '#4f46e5',
+    backgroundColor: '#ff5a1f',
+    borderColor: '#ff5a1f',
   },
 
   categoryText: {
-    color: '#888',
+    color: '#666',
     fontWeight: '600',
     fontSize: 13,
   },
@@ -465,80 +664,79 @@ const styles = StyleSheet.create({
   },
 
   createButton: {
-    backgroundColor: '#22c55e',
-    marginTop:15,
-    padding: 12,
-    height:12,
-    width:130,
-    borderRadius: 8,
+    backgroundColor: '#ff5a1f',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
     alignItems: 'center',
     marginBottom: 16,
   },
 
   subheading: {
-    color: '#888',
+    color: '#666',
     fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 14,
+    marginBottom: 18,
   },
 
-  // Poster card row
   posterRow: {
     paddingRight: 20,
     paddingBottom: 20,
-    gap: 14,
+    gap: 18,
   },
 
   posterCard: {
-    width: 160,
-    backgroundColor: '#1e1e1e',
-    borderRadius: 14,
+    width: 180,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ececec',
   },
 
   posterImage: {
-    width: 160,
-    height: 220,
+    width: 180,
+    height: 260,
   },
 
   posterPlaceholder: {
-    width: 160,
-    height: 220,
-    backgroundColor: '#1e1b4b',
+    width: 180,
+    height: 260,
+    backgroundColor: '#fff4ed',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 12,
-    gap: 8,
+    padding: 14,
+    gap: 10,
   },
 
   posterPlaceholderEmoji: {
-    fontSize: 32,
+    fontSize: 42,
   },
 
   posterPlaceholderTitle: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#111',
+    fontSize: 15,
+    fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
 
   posterPlaceholderClub: {
-    color: '#818cf8',
-    fontSize: 11,
+    color: '#ff5a1f',
+    fontSize: 12,
     textAlign: 'center',
   },
 
   posterBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(79,70,229,0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    top: 10,
+    left: 10,
+    backgroundColor: '#ff5a1f',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
 
   posterBadgeText: {
@@ -549,12 +747,12 @@ const styles = StyleSheet.create({
 
   posterFullBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(239,68,68,0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    top: 10,
+    right: 10,
+    backgroundColor: '#111',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
 
   posterFullBadgeText: {
@@ -564,49 +762,49 @@ const styles = StyleSheet.create({
   },
 
   posterInfo: {
-    padding: 10,
-    gap: 3,
+    padding: 14,
+    gap: 5,
   },
 
   posterTitle: {
-    color: 'white',
-    fontSize: 13,
-    fontWeight: 'bold',
-    lineHeight: 18,
+    color: '#111',
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 22,
   },
 
   posterSub: {
-    color: '#888',
-    fontSize: 11,
+    color: '#666',
+    fontSize: 12,
     marginTop: 2,
   },
 
   posterCount: {
-    color: '#22c55e',
-    fontSize: 11,
+    color: '#ff5a1f',
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 4,
   },
 
   emptyBox: {
     alignItems: 'center',
-    marginTop: 60,
+    marginTop: 80,
   },
 
   emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 12,
+    fontSize: 50,
+    marginBottom: 14,
   },
 
   emptyText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#111',
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: 6,
   },
 
   emptySubtext: {
-    color: '#666',
+    color: '#777',
     fontSize: 14,
   },
 });

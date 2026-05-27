@@ -1,10 +1,15 @@
-// app/signup.tsx
-
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, ActivityIndicator,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { signUp } from '../firebase/authService';
@@ -21,34 +26,41 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'student' | 'organizer'>('student');
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!name.trim()) e.name = 'Name is required';
-    if (!email.trim()) e.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
-    if (!phone.trim()) e.phone = 'Phone number is required';
-    else if (!/^\d{10}$/.test(phone.trim())) e.phone = 'Enter a valid 10-digit number';
-    if (!college.trim()) e.college = 'College is required';
-    if (!department.trim()) e.department = 'Department is required';
-    if (!year) e.year = 'Please select your year';
-    if (!password) e.password = 'Password is required';
-    else if (password.length < 6) e.password = 'At least 6 characters';
-    if (confirmPassword !== password) e.confirmPassword = 'Passwords do not match';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
   const handleSignup = async () => {
-    if (!validate()) return;
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !college ||
+      !department ||
+      !year ||
+      !password
+    ) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
+
     try {
-      await signUp(name, email, phone, college, department, year, password, role);
-      if (role === 'organizer') {
-        alert('✅ Account created!\n\nYour organizer request is pending admin approval.');
-      }
+      await signUp(
+        name,
+        email,
+        phone,
+        college,
+        department,
+        year,
+        password,
+        role
+      );
+
       router.replace('/');
     } catch (err: any) {
       alert(err.message);
@@ -58,126 +70,394 @@ export default function Signup() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#111111" />
 
-        <View style={styles.header}>
-          <Text style={styles.appName}>CampusPulse</Text>
-          <Text style={styles.heading}>Create Account</Text>
-          <Text style={styles.subheading}>Join your college event hub</Text>
-        </View>
+      <View style={styles.container}>
 
-        {/* Role selector */}
-        <View style={styles.roleRow}>
-          {(['student', 'organizer'] as const).map((r) => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.roleBtn, role === r && styles.roleBtnActive]}
-              onPress={() => setRole(r)}
-            >
-              <Text style={[styles.roleBtnText, role === r && styles.roleBtnTextActive]}>
-                {r === 'student' ? '🎓 Student' : '🗂 Organizer'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* LEFT PANEL */}
+        <View style={styles.leftPanel}>
 
-        {role === 'organizer' && (
-          <View style={styles.noticeBox}>
-            <Text style={styles.noticeText}>
-              ⏳ Organizer accounts require admin approval before you can post events.
+          <Text style={styles.brand}>
+            CAMPUSPULSE
+          </Text>
+
+          <View>
+            <Text style={styles.bigText}>
+              Join.{'\n'}
+              Connect.{'\n'}
+              Discover.
+            </Text>
+
+            <Text style={styles.caption}>
+              Create your student identity
             </Text>
           </View>
-        )}
 
-        <Field label="Full Name" placeholder="e.g. Arjun Menon" value={name} onChangeText={setName} error={errors.name} />
-        <Field label="College Email" placeholder="you@college.edu" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} />
-        <Field label="Phone Number" placeholder="10-digit mobile number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} />
-        <Field label="College" placeholder="e.g. GEC Palakkad" value={college} onChangeText={setCollege} error={errors.college} />
-        <Field label="Department" placeholder="e.g. Computer Science" value={department} onChangeText={setDepartment} error={errors.department} />
+        </View>
 
-        {/* Year selector */}
-        <Text style={styles.label}>Year</Text>
-        <View style={styles.yearRow}>
-          {YEARS.map((y) => (
+        {/* RIGHT PANEL */}
+        <ScrollView
+          contentContainerStyle={styles.rightPanel}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+
+          <Text style={styles.heading}>
+            Create Account
+          </Text>
+
+          {/* ROLE */}
+          <View style={styles.roleRow}>
+
             <TouchableOpacity
-              key={y}
-              style={[styles.yearBtn, year === y && styles.yearBtnActive]}
-              onPress={() => setYear(y)}
+              style={[
+                styles.roleButton,
+                role === 'student' && styles.roleButtonActive,
+              ]}
+              onPress={() => setRole('student')}
             >
-              <Text style={[styles.yearBtnText, year === y && styles.yearBtnTextActive]}>{y}</Text>
+              <Text
+                style={[
+                  styles.roleText,
+                  role === 'student' && styles.roleTextActive,
+                ]}
+              >
+                🎓 Student
+              </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-        {errors.year ? <Text style={styles.errorText}>{errors.year}</Text> : null}
 
-        <Field label="Password" placeholder="Min. 6 characters" value={password} onChangeText={setPassword} secureTextEntry error={errors.password} />
-        <Field label="Confirm Password" placeholder="Re-enter password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry error={errors.confirmPassword} />
+            <TouchableOpacity
+              style={[
+                styles.roleButton,
+                role === 'organizer' && styles.roleButtonActive,
+              ]}
+              onPress={() => setRole('organizer')}
+            >
+              <Text
+                style={[
+                  styles.roleText,
+                  role === 'organizer' && styles.roleTextActive,
+                ]}
+              >
+                🗂 Organizer
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={handleSignup} disabled={loading}>
-          {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Create Account</Text>}
-        </TouchableOpacity>
+          </View>
 
-        <View style={styles.loginRow}>
-          <Text style={styles.loginText}>Already have an account? </Text>
-          <Link href="/login" asChild>
-            <TouchableOpacity><Text style={styles.loginLink}>Log in</Text></TouchableOpacity>
-          </Link>
-        </View>
+          {/* INPUTS */}
+          <Field
+            label="FULL NAME"
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+          />
 
-      </ScrollView>
+          <Field
+            label="EMAIL"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@college.edu"
+          />
+
+          <Field
+            label="PHONE"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="9876543210"
+          />
+
+          <Field
+            label="COLLEGE"
+            value={college}
+            onChangeText={setCollege}
+            placeholder="Your college"
+          />
+
+          <Field
+            label="DEPARTMENT"
+            value={department}
+            onChangeText={setDepartment}
+            placeholder="Computer Science"
+          />
+
+          {/* YEAR */}
+          <Text style={styles.label}>YEAR</Text>
+
+          <View style={styles.yearRow}>
+            {YEARS.map((y) => (
+              <TouchableOpacity
+                key={y}
+                style={[
+                  styles.yearButton,
+                  year === y && styles.yearButtonActive,
+                ]}
+                onPress={() => setYear(y)}
+              >
+                <Text
+                  style={[
+                    styles.yearText,
+                    year === y && styles.yearTextActive,
+                  ]}
+                >
+                  {y}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Field
+            label="PASSWORD"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            secureTextEntry
+          />
+
+          <Field
+            label="CONFIRM PASSWORD"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="••••••••"
+            secureTextEntry
+          />
+
+          {/* BUTTON */}
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>
+                Create Account →
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* LOGIN */}
+          <View style={styles.bottomRow}>
+            <Text style={styles.bottomText}>
+              Already have an account?
+            </Text>
+
+            <Link href="/login" asChild>
+              <TouchableOpacity>
+                <Text style={styles.link}>
+                  {' '}Log in
+                </Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+
+        </ScrollView>
+
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 type FieldProps = {
-  label: string; placeholder: string; value: string;
-  onChangeText: (v: string) => void; secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
-  autoCapitalize?: 'none' | 'sentences'; error?: string;
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  secureTextEntry?: boolean;
 };
-function Field({ label, placeholder, value, onChangeText, secureTextEntry, keyboardType = 'default', autoCapitalize = 'sentences', error }: FieldProps) {
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry,
+}: FieldProps) {
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={styles.field}>
+      <Text style={styles.label}>
+        {label}
+      </Text>
+
       <TextInput
-        placeholder={placeholder} placeholderTextColor="#555"
-        style={[styles.input, error ? styles.inputError : null]}
-        value={value} onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
+        style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor="#999"
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
       />
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-  header: { marginBottom: 28 },
-  appName: { color: '#4f46e5', fontSize: 14, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 },
-  heading: { color: 'white', fontSize: 32, fontWeight: 'bold', marginBottom: 6 },
-  subheading: { color: '#888', fontSize: 15 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  roleBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1e1e1e', alignItems: 'center', borderWidth: 1.5, borderColor: 'transparent' },
-  roleBtnActive: { borderColor: '#4f46e5', backgroundColor: '#1e1b4b' },
-  roleBtnText: { color: '#888', fontWeight: '600', fontSize: 15 },
-  roleBtnTextActive: { color: 'white' },
-  noticeBox: { backgroundColor: '#2a1f00', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 12, padding: 14, marginBottom: 20 },
-  noticeText: { color: '#f59e0b', fontSize: 13, lineHeight: 20 },
-  fieldWrapper: { marginBottom: 16 },
-  label: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#1e1e1e', color: 'white', padding: 15, borderRadius: 12, fontSize: 15, borderWidth: 1.5, borderColor: 'transparent' },
-  inputError: { borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4, marginLeft: 4, marginBottom: 8 },
-  yearRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  yearBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#1e1e1e', borderWidth: 1.5, borderColor: 'transparent' },
-  yearBtnActive: { backgroundColor: '#1e1b4b', borderColor: '#4f46e5' },
-  yearBtnText: { color: '#888', fontWeight: '600', fontSize: 13 },
-  yearBtnTextActive: { color: 'white' },
-  button: { backgroundColor: '#4f46e5', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8, marginBottom: 20 },
-  buttonText: { color: 'white', fontSize: 17, fontWeight: 'bold' },
-  loginRow: { flexDirection: 'row', justifyContent: 'center' },
-  loginText: { color: '#888', fontSize: 14 },
-  loginLink: { color: '#22c55e', fontSize: 14, fontWeight: '700' },
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#111111',
+  },
+
+  leftPanel: {
+    flex: 1,
+    backgroundColor: '#ff5a1f',
+    padding: 50,
+    justifyContent: 'space-between',
+  },
+
+  rightPanel: {
+    flexGrow: 1,
+    flex: 1,
+    backgroundColor: '#f4f4f4',
+    padding: 50,
+  },
+
+  brand: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 4,
+  },
+
+  bigText: {
+    color: 'white',
+    fontSize: 52,
+    fontWeight: '800',
+    lineHeight: 58,
+  },
+
+  caption: {
+    marginTop: 16,
+    color: '#ffe5db',
+    fontSize: 16,
+  },
+
+  heading: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#111',
+    marginBottom: 30,
+  },
+
+  roleRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 30,
+  },
+
+  roleButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+
+  roleButtonActive: {
+    backgroundColor: '#fff2ec',
+    borderColor: '#ff5a1f',
+  },
+
+  roleText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+
+  roleTextActive: {
+    color: '#ff5a1f',
+    fontWeight: '700',
+  },
+
+  field: {
+    marginBottom: 26,
+  },
+
+  label: {
+    fontSize: 11,
+    color: '#ff5a1f',
+    marginBottom: 10,
+    letterSpacing: 2,
+    fontWeight: '700',
+  },
+
+  input: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    paddingBottom: 12,
+    fontSize: 16,
+    color: '#111',
+  },
+
+  yearRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 28,
+  },
+
+  yearButton: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'white',
+  },
+
+  yearButtonActive: {
+    borderColor: '#ff5a1f',
+    backgroundColor: '#fff2ec',
+  },
+
+  yearText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+
+  yearTextActive: {
+    color: '#ff5a1f',
+    fontWeight: '700',
+  },
+
+  button: {
+    backgroundColor: '#ff5a1f',
+    paddingVertical: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 10,
+
+    shadowColor: '#ff5a1f',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+
+  buttonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+    marginBottom: 30,
+  },
+
+  bottomText: {
+    color: '#999',
+  },
+
+  link: {
+    color: '#ff5a1f',
+    fontWeight: '700',
+  },
 });

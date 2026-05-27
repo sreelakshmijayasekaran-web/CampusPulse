@@ -31,6 +31,7 @@ import {
 import {
   arrayUnion,
   updateDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -54,6 +55,7 @@ export default function EventDetails() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [unregLoading, setUnregLoading] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
@@ -250,30 +252,55 @@ export default function EventDetails() {
       ]
     );
   };
+//Deleting the event
+    const handleDeleteEvent = async () => {
 
-  // ── DELETE EVENT (organizer only) ────────────────────────────────────────────
-  const handleDeleteEvent = () => {
+  const eventId = Array.isArray(id) ? id[0] : id;
+
+  if (!eventId) {
+    Alert.alert("Error", "Event ID not found.");
+    return;
+  }
+
+  try {
+
+    // ── ADMIN → HARD DELETE ──
+    if (isAdmin) {
+
+      await deleteDoc(doc(db, "events", eventId));
+
+      Alert.alert(
+        "Deleted",
+        "Event permanently deleted."
+      );
+    }
+
+    // ── ORGANIZER → SOFT DELETE ──
+    else {
+
+      await updateDoc(doc(db, "events", eventId), {
+        status: "deleted",
+        deletedAt: serverTimestamp(),
+      });
+
+      Alert.alert(
+        "Removed",
+        "Event removed successfully."
+      );
+    }
+
+    router.replace("/my-events");
+
+  } catch (err: any) {
+
+    console.log("DELETE ERROR:", err);
+
     Alert.alert(
-      "🗑 Delete Event",
-      `Are you sure you want to delete this event? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'events', id!));
-              Alert.alert("Deleted", "Your event has been deleted.");
-              router.replace("/my-events");
-            } catch (err: any) {
-              Alert.alert("Error", err.message);
-            }
-          },
-        },
-      ]
+      "Delete Failed",
+      err.message
     );
-  };
+  }
+};
 
   const loadRegisteredStudents = async () => {
     if (!event?.registeredUsers?.length) return;
