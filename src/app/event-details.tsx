@@ -1,7 +1,8 @@
 // app/event-details.tsx
 
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { arrayUnion, deleteDoc, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,14 +11,12 @@ import {
   Dimensions,
   Image,
   Linking,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   Event,
   fetchEventById,
@@ -28,11 +27,6 @@ import { auth, db } from '../firebase/firebaseConfig';
 import {
   sendNotificationToUser,
 } from '../firebase/notificationService';
-import {
-  arrayUnion,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 380;
@@ -47,6 +41,25 @@ type UserProfile = {
   college?: string;
 };
 
+// Helper to safely convert any value to a display string
+const toDisplayString = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  // Firestore Timestamp
+  if (value?.toDate && typeof value.toDate === 'function') {
+    return value.toDate().toLocaleString([], {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  }
+  return String(value);
+};
+
 export default function EventDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
@@ -59,7 +72,6 @@ export default function EventDetails() {
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
-  // Track which actions the user has taken THIS SESSION (persisted in Firestore via separate fields)
   const [hasMarkedInterest, setHasMarkedInterest] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -84,7 +96,6 @@ export default function EventDetails() {
       setEvent(evt);
 
       if (evt && currentUid) {
-        // Check if user is the organizer
         if (evt.createdBy === currentUid) {
           const userSnap = await getDoc(doc(db, 'users', currentUid));
           if (
@@ -95,7 +106,6 @@ export default function EventDetails() {
             setIsOrganizer(true);
           }
         }
-        // Check if user has already marked interest (in interestedUsers array)
         if (evt.interestedUsers?.includes(currentUid)) {
           setHasMarkedInterest(true);
         }
@@ -105,23 +115,21 @@ export default function EventDetails() {
     load();
   }, [id]);
 
-  // User is in registeredUsers → fully registered
   const isRegistered = event?.registeredUsers?.includes(currentUid ?? '') ?? false;
-  // User is in interestedUsers → marked interest but not yet registered
   const isInterested = event?.interestedUsers?.includes(currentUid ?? '') ?? false;
 
   const count = event?.registeredUsers?.length ?? 0;
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
-  const deadlinePassed =
-  event?.deadline
-    ? new Date(event.deadline) < new Date()
+
+  const deadlinePassed = event?.deadline
+    ? new Date(toDisplayString(event.deadline)) < new Date()
     : false;
-  const deadlineSoon = event?.deadline ? isDeadlineWithin12Hours(event.deadline) : false;
+  const deadlineSoon = event?.deadline
+    ? isDeadlineWithin12Hours(toDisplayString(event.deadline))
+    : false;
 
   // ── MARK INTEREST ────────────────────────────────────────────────────────────
-  // Adds user to interestedUsers[] (NOT registeredUsers)
-  // Sends a deadline notification ONLY if deadline is within 12 hours
   const handleMarkInterest = async () => {
     if (!currentUid) {
       Alert.alert('Login required', 'Please log in first.');
@@ -129,7 +137,6 @@ export default function EventDetails() {
     }
     setInterestLoading(true);
     try {
-      // Add to interestedUsers (separate field, not registeredUsers)
       await updateDoc(doc(db, 'events', id!), {
         interestedUsers: arrayUnion(currentUid),
       });
@@ -138,12 +145,11 @@ export default function EventDetails() {
       const updated = await fetchEventById(id!);
       setEvent(updated);
 
-      // Send deadline notification ONLY if deadline is within 12 hours
-      if (event?.deadline && isDeadlineWithin12Hours(event.deadline)) {
+      if (event?.deadline && isDeadlineWithin12Hours(toDisplayString(event.deadline))) {
         await sendNotificationToUser(
           currentUid,
           `⏰ Deadline Soon: ${event.title}`,
-          `You marked interest in "${event.title}". Registration closes in less than 12 hours: ${event.deadline}. Register now!`,
+          `You marked interest in "${event.title}". Registration closes in less than 12 hours: ${toDisplayString(event.deadline)}. Register now!`,
           { type: 'deadline_reminder', eventId: id! }
         );
         Alert.alert(
@@ -164,7 +170,6 @@ export default function EventDetails() {
   };
 
   // ── REGISTER NOW ─────────────────────────────────────────────────────────────
-  // Adds user to registeredUsers[] AND sends confirmation + deadline notification immediately
   const handleRegisterNow = async () => {
     if (!currentUid) {
       Alert.alert('Login required', 'Please log in first.');
@@ -176,7 +181,6 @@ export default function EventDetails() {
     }
     setRegisterLoading(true);
     try {
-      // Check seat limit before registering
       const fresh = await fetchEventById(id!);
       const freshCount = fresh?.registeredUsers?.length ?? 0;
       const freshLimit = fresh?.seatLimit ?? null;
@@ -186,7 +190,6 @@ export default function EventDetails() {
         return;
       }
 
-      // Add to registeredUsers
       await updateDoc(doc(db, 'events', id!), {
         registeredUsers: arrayUnion(currentUid),
       });
@@ -194,25 +197,22 @@ export default function EventDetails() {
       const updated = await fetchEventById(id!);
       setEvent(updated);
 
-      // 1. Send registration confirmation notification
       await sendNotificationToUser(
         currentUid,
         `✅ Registered: ${event?.title}`,
-        `You've successfully registered for "${event?.title}".${event?.deadline ? ` Deadline: ${event.deadline}` : ''}`,
+        `You've successfully registered for "${event?.title}".${event?.deadline ? ` Deadline: ${toDisplayString(event.deadline)}` : ''}`,
         { type: 'registration_confirmed', eventId: id! }
       );
 
-      // 2. Always send a deadline reminder notification at the same time
       if (event?.deadline) {
         await sendNotificationToUser(
           currentUid,
           `⏰ Deadline Reminder: ${event.title}`,
-          `Don't miss the registration deadline: ${event.deadline}. Make sure you've completed all steps!`,
+          `Don't miss the registration deadline: ${toDisplayString(event.deadline)}. Make sure you've completed all steps!`,
           { type: 'deadline_reminder', eventId: id! }
         );
       }
 
-      // 3. Open external registration link if provided
       if (event?.registerLink) {
         Linking.openURL(event.registerLink).catch(() =>
           Alert.alert('Error', 'Could not open the registration link.')
@@ -256,55 +256,33 @@ export default function EventDetails() {
       ]
     );
   };
-//Deleting the event
-    const handleDeleteEvent = async () => {
 
-  const eventId = Array.isArray(id) ? id[0] : id;
+  // ── DELETE EVENT ─────────────────────────────────────────────────────────────
+  const handleDeleteEvent = async () => {
+    const eventId = Array.isArray(id) ? id[0] : id;
 
-  if (!eventId) {
-    Alert.alert("Error", "Event ID not found.");
-    return;
-  }
-
-  try {
-
-    // ── ADMIN → HARD DELETE ──
-    if (isAdmin) {
-
-      await deleteDoc(doc(db, "events", eventId));
-
-      Alert.alert(
-        "Deleted",
-        "Event permanently deleted."
-      );
+    if (!eventId) {
+      Alert.alert('Error', 'Event ID not found.');
+      return;
     }
 
-    // ── ORGANIZER → SOFT DELETE ──
-    else {
-
-      await updateDoc(doc(db, "events", eventId), {
-        status: "deleted",
-        deletedAt: serverTimestamp(),
-      });
-
-      Alert.alert(
-        "Removed",
-        "Event removed successfully."
-      );
+    try {
+      if (isAdmin) {
+        await deleteDoc(doc(db, 'events', eventId));
+        Alert.alert('Deleted', 'Event permanently deleted.');
+      } else {
+        await updateDoc(doc(db, 'events', eventId), {
+          status: 'deleted',
+          deletedAt: serverTimestamp(),
+        });
+        Alert.alert('Removed', 'Event removed successfully.');
+      }
+      router.replace('/my-events');
+    } catch (err: any) {
+      console.log('DELETE ERROR:', err);
+      Alert.alert('Delete Failed', err.message);
     }
-
-    router.replace("/my-events");
-
-  } catch (err: any) {
-
-    console.log("DELETE ERROR:", err);
-
-    Alert.alert(
-      "Delete Failed",
-      err.message
-    );
-  }
-};
+  };
 
   const loadRegisteredStudents = async () => {
     if (!event?.registeredUsers?.length) return;
@@ -331,23 +309,30 @@ export default function EventDetails() {
     }
     setShowStudents((prev) => !prev);
   };
-  const formatDateTime = (dateTime: string) => {
 
-  if (!dateTime) return "";
+  const formatDateTime = (dateTime: any): string => {
+    if (!dateTime) return 'TBA';
+    try {
+      // Handle Firestore Timestamp
+      const date =
+        dateTime?.toDate && typeof dateTime.toDate === 'function'
+          ? dateTime.toDate()
+          : new Date(dateTime);
 
-  const date = new Date(dateTime);
+      if (isNaN(date.getTime())) return String(dateTime);
 
-  return date.toLocaleString([], {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-    
+      return date.toLocaleString([], {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return String(dateTime);
+    }
+  };
 
   if (loading) {
     return (
@@ -362,11 +347,13 @@ export default function EventDetails() {
       <View style={styles.centered}>
         <Text style={styles.errorText}>Event not found.</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>← Go back</Text>
+          <Text style={styles.backLink}>{'← Go back'}</Text>
         </TouchableOpacity>
       </View>
     );
   }
+
+  const deadlineDisplay = event.deadline ? toDisplayString(event.deadline) : null;
 
   return (
     <View style={styles.container}>
@@ -375,14 +362,14 @@ export default function EventDetails() {
       {/* Floating top bar */}
       <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.floatingHeaderBtn}>
-          <Text style={styles.floatingHeaderBtnText}>← Back</Text>
+          <Text style={styles.floatingHeaderBtnText}>{'← Back'}</Text>
         </TouchableOpacity>
         {isOrganizer && (
           <TouchableOpacity
             style={styles.floatingHeaderBtn}
             onPress={() => router.push(`/create-event?id=${event.id}`)}
           >
-            <Text style={styles.floatingHeaderBtnText}>✏️ Edit</Text>
+            <Text style={styles.floatingHeaderBtnText}>{'✏️ Edit'}</Text>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -405,7 +392,7 @@ export default function EventDetails() {
               <Image source={{ uri: event.posterUrl }} style={styles.posterImage} resizeMode="cover" />
             ) : (
               <View style={styles.posterPlaceholder}>
-                <Text style={styles.posterPlaceholderText}>🎉</Text>
+                <Text style={styles.posterPlaceholderText}>{'🎉'}</Text>
               </View>
             )}
           </Animated.View>
@@ -418,58 +405,57 @@ export default function EventDetails() {
 
           <View style={styles.heroButtons}>
             <TouchableOpacity style={styles.heroPillBtn} onPress={() => router.back()}>
-              <Text style={styles.heroPillBtnText}>← Back</Text>
+              <Text style={styles.heroPillBtnText}>{'← Back'}</Text>
             </TouchableOpacity>
             {isOrganizer && (
               <TouchableOpacity
                 style={styles.heroPillBtn}
                 onPress={() => router.push(`/create-event?id=${event.id}`)}
               >
-                <Text style={styles.heroPillBtnText}>✏️ Edit Event</Text>
+                <Text style={styles.heroPillBtnText}>{'✏️ Edit Event'}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.heroTextBlock}>
-            {event.category && (
+            {event.category ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{event.category}</Text>
               </View>
-            )}
+            ) : null}
             <Text style={styles.title}>{event.title}</Text>
           </View>
         </View>
 
         {/* Content below hero */}
         <View style={styles.content}>
-          
 
           {/* Deadline warning banner */}
-          {deadlineSoon && !isRegistered && (
+          {deadlineSoon && !isRegistered && deadlineDisplay ? (
             <View style={styles.deadlineBanner}>
               <Text style={styles.deadlineBannerText}>
-                ⏰ Registration closes in less than 12 hours! Deadline: {event.deadline}
+                {`⏰ Registration closes in less than 12 hours! Deadline: ${deadlineDisplay}`}
               </Text>
             </View>
-          )}
+          ) : null}
 
           {/* Info Card */}
           <View style={styles.infoCard}>
-            <InfoRow icon="📍" label="Venue" value={event.venue} />
-            <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)}/>
-            <InfoRow icon="🏷" label="Organised by" value={event.club} />
-            {event.deadline && (
-              <InfoRow icon="⏰" label="Registration Deadline" value={event.deadline} />
-            )}
+            <InfoRow icon="📍" label="Venue" value={event.venue ?? 'TBA'} />
+            <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)} />
+            <InfoRow icon="🏷" label="Organised by" value={event.club ?? ''} />
+            {deadlineDisplay ? (
+              <InfoRow icon="⏰" label="Registration Deadline" value={deadlineDisplay} />
+            ) : null}
           </View>
 
           {/* Seat count card */}
           <View style={styles.countCard}>
             <Text style={styles.countNumber}>{count}</Text>
             <Text style={styles.countLabel}>
-              student{count !== 1 ? 's' : ''} registered
+              {`student${count !== 1 ? 's' : ''} registered`}
             </Text>
-            {seatLimit !== null && (
+            {seatLimit !== null ? (
               <View style={[styles.seatBadge, isFull && styles.seatBadgeFull]}>
                 <Text style={[styles.seatBadgeText, isFull && styles.seatBadgeTextFull]}>
                   {isFull
@@ -477,72 +463,74 @@ export default function EventDetails() {
                     : `🟢 ${seatLimit - count} seat${seatLimit - count !== 1 ? 's' : ''} left`}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           {/* Organizer: registered students */}
-          {isOrganizer && (
+          {isOrganizer ? (
             <View style={styles.organizerSection}>
               <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
                 <Text style={styles.studentsToggleText}>
-                  👥 {count} Registered Student{count !== 1 ? 's' : ''}
-                  {count > 0 ? (showStudents ? '  ▲ Hide' : '  ▼ View All') : ''}
+                  {`👥 ${count} Registered Student${count !== 1 ? 's' : ''}${count > 0 ? (showStudents ? '  ▲ Hide' : '  ▼ View All') : ''}`}
                 </Text>
               </TouchableOpacity>
 
-              {showStudents && (
+              {showStudents ? (
                 <View style={styles.studentsList}>
                   {loadingUsers ? (
                     <ActivityIndicator color="#4f46e5" style={{ marginTop: 10 }} />
                   ) : registeredUsers.length === 0 ? (
-                    <Text style={styles.noStudents}>No students have registered yet.</Text>
+                    <Text style={styles.noStudents}>{'No students have registered yet.'}</Text>
                   ) : (
                     registeredUsers.map((u) => (
                       <View key={u.id} style={styles.studentCard}>
                         <View style={styles.studentRow}>
                           <View style={styles.studentAvatar}>
-                            <Text style={styles.avatarText}>{u.name?.[0]?.toUpperCase()}</Text>
+                            <Text style={styles.avatarText}>{u.name?.[0]?.toUpperCase() ?? '?'}</Text>
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.studentName}>{u.name}</Text>
-                            <Text style={styles.studentDetail}>✉️ {u.email}</Text>
+                            <Text style={styles.studentDetail}>{`✉️ ${u.email}`}</Text>
                             {u.phone
-                              ? <Text style={styles.studentDetail}>📞 {u.phone}</Text>
-                              : <Text style={styles.studentDetailMissing}>📞 Phone not provided</Text>
+                              ? <Text style={styles.studentDetail}>{`📞 ${u.phone}`}</Text>
+                              : <Text style={styles.studentDetailMissing}>{'📞 Phone not provided'}</Text>
                             }
-                            {u.department && <Text style={styles.studentDetail}>📚 {u.department}</Text>}
+                            {u.department
+                              ? <Text style={styles.studentDetail}>{`📚 ${u.department}`}</Text>
+                              : null}
                             {u.year
-                              ? <Text style={styles.studentDetail}>📅 {u.year}</Text>
-                              : <Text style={styles.studentDetailMissing}>📅 Year not provided</Text>
+                              ? <Text style={styles.studentDetail}>{`📅 ${u.year}`}</Text>
+                              : <Text style={styles.studentDetailMissing}>{'📅 Year not provided'}</Text>
                             }
-                            {u.college && <Text style={styles.studentDetail}>🏫 {u.college}</Text>}
+                            {u.college
+                              ? <Text style={styles.studentDetail}>{`🏫 ${u.college}`}</Text>
+                              : null}
                           </View>
                         </View>
                       </View>
                     ))
                   )}
                 </View>
-              )}
+              ) : null}
 
               {/* Delete Event button */}
               <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
-                <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
+                <Text style={styles.deleteEventBtnText}>{'🗑 Delete Event'}</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
 
           {/* Description */}
-          <Text style={styles.sectionHeading}>About this Event</Text>
+          <Text style={styles.sectionHeading}>{'About this Event'}</Text>
           <Text style={styles.description}>
             {event.description?.trim() ? event.description : 'No description provided yet.'}
           </Text>
 
           {/* ── CTA Section ── */}
           {isRegistered ? (
-            // Already fully registered
             <View>
               <View style={styles.registeredBadge}>
-                <Text style={styles.registeredBadgeText}>✅ You're Registered</Text>
+                <Text style={styles.registeredBadgeText}>{"✅ You're Registered"}</Text>
               </View>
               <TouchableOpacity
                 style={styles.unregisterButton}
@@ -551,26 +539,21 @@ export default function EventDetails() {
               >
                 {unregLoading
                   ? <ActivityIndicator color="#ef4444" />
-                  : <Text style={styles.unregisterButtonText}>✕ Remove Registration</Text>
+                  : <Text style={styles.unregisterButtonText}>{'✕ Remove Registration'}</Text>
                 }
               </TouchableOpacity>
             </View>
-            ) : deadlinePassed ? (
-              <View style={styles.fullBadge}>
-                  <Text style={styles.fullBadgeText}>
-                      ⛔ Registration Deadline Passed
-                  </Text>
-              </View>
-            ) 
-           : isFull ? (
+          ) : deadlinePassed ? (
             <View style={styles.fullBadge}>
-              <Text style={styles.fullBadgeText}>🔴 Registrations Closed — Event Full</Text>
+              <Text style={styles.fullBadgeText}>{'⛔ Registration Deadline Passed'}</Text>
+            </View>
+          ) : isFull ? (
+            <View style={styles.fullBadge}>
+              <Text style={styles.fullBadgeText}>{'🔴 Registrations Closed — Event Full'}</Text>
             </View>
           ) : (
-            // Show both buttons
             <View style={styles.ctaContainer}>
-              {/* Mark Interest button — only if not yet interested */}
-              {!isInterested && (
+              {!isInterested ? (
                 <TouchableOpacity
                   style={[
                     styles.interestButton,
@@ -595,16 +578,12 @@ export default function EventDetails() {
                     )
                   }
                 </TouchableOpacity>
-              )}
-
-              {/* Already marked interest — show badge */}
-              {isInterested && (
+              ) : (
                 <View style={styles.interestedBadge}>
-                  <Text style={styles.interestedBadgeText}>⭐ Interest Marked</Text>
+                  <Text style={styles.interestedBadgeText}>{'⭐ Interest Marked'}</Text>
                 </View>
               )}
 
-              {/* Register Now button — always shown when not registered */}
               <TouchableOpacity
                 style={[
                   styles.registerButton,
@@ -621,18 +600,18 @@ export default function EventDetails() {
                         {deadlineSoon ? '🔥 Register Now — Closing Soon!' : 'Register Now →'}
                       </Text>
                       <Text style={styles.registerButtonSub}>
-                        Instant confirmation + deadline reminder
+                        {'Instant confirmation + deadline reminder'}
                       </Text>
                     </View>
                   )
                 }
               </TouchableOpacity>
 
-              {!event.registerLink && (
+              {!event.registerLink ? (
                 <Text style={styles.noLinkNote}>
-                  * Registering adds you to the event directly in the app.
+                  {'* Registering adds you to the event directly in the app.'}
                 </Text>
-              )}
+              ) : null}
             </View>
           )}
         </View>
@@ -759,9 +738,7 @@ const styles = StyleSheet.create({
   sectionHeading: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   description: { color: '#cccccc', fontSize: 15, lineHeight: 24, marginBottom: 28 },
 
-  // ── CTA ──
   ctaContainer: { gap: 12, marginBottom: 10 },
-
   btnInner: { alignItems: 'center', gap: 3 },
 
   interestButton: {
@@ -813,15 +790,12 @@ const styles = StyleSheet.create({
 
   deleteEventBtn: {
     marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#3a1c1c',
-    alignItems: 'center',
     paddingVertical: 12,
     borderRadius: 10,
     backgroundColor: '#2a0a0a',
     borderWidth: 1,
     borderColor: '#ef4444',
+    alignItems: 'center',
   },
   deleteEventBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
 });
