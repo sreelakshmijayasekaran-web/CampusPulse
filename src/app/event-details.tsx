@@ -73,6 +73,7 @@ export default function EventDetails() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
   const [hasMarkedInterest, setHasMarkedInterest] = useState(false);
+  const [closeRegLoading, setCloseRegLoading] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const currentUid = auth.currentUser?.uid;
@@ -96,16 +97,23 @@ export default function EventDetails() {
       setEvent(evt);
 
       if (evt && currentUid) {
-        if (evt.createdBy === currentUid) {
-          const userSnap = await getDoc(doc(db, 'users', currentUid));
-          if (
-            userSnap.exists() &&
-            userSnap.data().role === 'organizer' &&
-            userSnap.data().status === 'approved'
-          ) {
-            setIsOrganizer(true);
-          }
+        const userSnap = await getDoc(doc(db, 'users', currentUid));
+        const userData = userSnap.exists() ? userSnap.data() : null;
+
+        // Check admin
+        if (userData?.role === 'admin') {
+          setIsAdmin(true);
         }
+
+        // Check organizer
+        if (
+          evt.createdBy === currentUid &&
+          userData?.role === 'organizer' &&
+          userData?.status === 'approved'
+        ) {
+          setIsOrganizer(true);
+        }
+
         if (evt.interestedUsers?.includes(currentUid)) {
           setHasMarkedInterest(true);
         }
@@ -122,12 +130,57 @@ export default function EventDetails() {
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
 
+  // registrationClosed is a manual override stored in Firestore
+  const registrationClosed = event?.registrationClosed === true;
+
   const deadlinePassed = event?.deadline
     ? new Date(toDisplayString(event.deadline)) < new Date()
     : false;
   const deadlineSoon = event?.deadline
     ? isDeadlineWithin12Hours(toDisplayString(event.deadline))
     : false;
+
+  // ── CLOSE / REOPEN REGISTRATION ──────────────────────────────────────────────
+  const handleToggleRegistration = async () => {
+    const eventId = Array.isArray(id) ? id[0] : id;
+    if (!eventId) return;
+
+    const action = registrationClosed ? 'reopen' : 'close';
+
+    Alert.alert(
+      registrationClosed ? 'Reopen Registration?' : 'Close Registration?',
+      registrationClosed
+        ? 'This will allow students to register again.'
+        : 'This will prevent any new registrations. Existing registrations remain.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: registrationClosed ? 'Reopen' : 'Close',
+          style: registrationClosed ? 'default' : 'destructive',
+          onPress: async () => {
+            setCloseRegLoading(true);
+            try {
+              await updateDoc(doc(db, 'events', eventId), {
+                registrationClosed: !registrationClosed,
+              });
+              const updated = await fetchEventById(eventId);
+              setEvent(updated);
+              Alert.alert(
+                action === 'close' ? 'Registration Closed' : 'Registration Reopened',
+                action === 'close'
+                  ? 'No new registrations will be accepted.'
+                  : 'Students can now register again.'
+              );
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            } finally {
+              setCloseRegLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // ── MARK INTEREST ────────────────────────────────────────────────────────────
   const handleMarkInterest = async () => {
@@ -313,7 +366,6 @@ export default function EventDetails() {
   const formatDateTime = (dateTime: any): string => {
     if (!dateTime) return 'TBA';
     try {
-      // Handle Firestore Timestamp
       const date =
         dateTime?.toDate && typeof dateTime.toDate === 'function'
           ? dateTime.toDate()
@@ -345,7 +397,7 @@ export default function EventDetails() {
   if (!event) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>Event not found.</Text>
+        <Text style={styles.errorText}>{'Event not found.'}</Text>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backLink}>{'← Go back'}</Text>
         </TouchableOpacity>
@@ -354,6 +406,7 @@ export default function EventDetails() {
   }
 
   const deadlineDisplay = event.deadline ? toDisplayString(event.deadline) : null;
+  const canManage = isOrganizer || isAdmin;
 
   return (
     <View style={styles.container}>
@@ -364,14 +417,14 @@ export default function EventDetails() {
         <TouchableOpacity onPress={() => router.back()} style={styles.floatingHeaderBtn}>
           <Text style={styles.floatingHeaderBtnText}>{'← Back'}</Text>
         </TouchableOpacity>
-        {isOrganizer && (
+        {isOrganizer ? (
           <TouchableOpacity
             style={styles.floatingHeaderBtn}
             onPress={() => router.push(`/create-event?id=${event.id}`)}
           >
             <Text style={styles.floatingHeaderBtnText}>{'✏️ Edit'}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </Animated.View>
 
       <Animated.ScrollView
@@ -407,14 +460,14 @@ export default function EventDetails() {
             <TouchableOpacity style={styles.heroPillBtn} onPress={() => router.back()}>
               <Text style={styles.heroPillBtnText}>{'← Back'}</Text>
             </TouchableOpacity>
-            {isOrganizer && (
+            {isOrganizer ? (
               <TouchableOpacity
                 style={styles.heroPillBtn}
                 onPress={() => router.push(`/create-event?id=${event.id}`)}
               >
                 <Text style={styles.heroPillBtnText}>{'✏️ Edit Event'}</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.heroTextBlock}>
@@ -429,6 +482,15 @@ export default function EventDetails() {
 
         {/* Content below hero */}
         <View style={styles.content}>
+
+          {/* Registration Closed banner — visible to everyone */}
+          {registrationClosed ? (
+            <View style={styles.regClosedBanner}>
+              <Text style={styles.regClosedBannerText}>
+                {'🔒 Registration has been closed by the organizer.'}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Deadline warning banner */}
           {deadlineSoon && !isRegistered && deadlineDisplay ? (
@@ -466,57 +528,90 @@ export default function EventDetails() {
             ) : null}
           </View>
 
-          {/* Organizer: registered students */}
-          {isOrganizer ? (
+          {/* Organizer / Admin section */}
+          {canManage ? (
             <View style={styles.organizerSection}>
-              <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
-                <Text style={styles.studentsToggleText}>
-                  {`👥 ${count} Registered Student${count !== 1 ? 's' : ''}${count > 0 ? (showStudents ? '  ▲ Hide' : '  ▼ View All') : ''}`}
-                </Text>
-              </TouchableOpacity>
 
-              {showStudents ? (
-                <View style={styles.studentsList}>
-                  {loadingUsers ? (
-                    <ActivityIndicator color="#4f46e5" style={{ marginTop: 10 }} />
-                  ) : registeredUsers.length === 0 ? (
-                    <Text style={styles.noStudents}>{'No students have registered yet.'}</Text>
-                  ) : (
-                    registeredUsers.map((u) => (
-                      <View key={u.id} style={styles.studentCard}>
-                        <View style={styles.studentRow}>
-                          <View style={styles.studentAvatar}>
-                            <Text style={styles.avatarText}>{u.name?.[0]?.toUpperCase() ?? '?'}</Text>
+              {/* Registered students — only organizer sees this */}
+              {isOrganizer ? (
+                <>
+                  <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
+                    <Text style={styles.studentsToggleText}>
+                      {`👥 ${count} Registered Student${count !== 1 ? 's' : ''}${count > 0 ? (showStudents ? '  ▲ Hide' : '  ▼ View All') : ''}`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showStudents ? (
+                    <View style={styles.studentsList}>
+                      {loadingUsers ? (
+                        <ActivityIndicator color="#4f46e5" style={{ marginTop: 10 }} />
+                      ) : registeredUsers.length === 0 ? (
+                        <Text style={styles.noStudents}>{'No students have registered yet.'}</Text>
+                      ) : (
+                        registeredUsers.map((u) => (
+                          <View key={u.id} style={styles.studentCard}>
+                            <View style={styles.studentRow}>
+                              <View style={styles.studentAvatar}>
+                                <Text style={styles.avatarText}>{u.name?.[0]?.toUpperCase() ?? '?'}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.studentName}>{u.name}</Text>
+                                <Text style={styles.studentDetail}>{`✉️ ${u.email}`}</Text>
+                                {u.phone
+                                  ? <Text style={styles.studentDetail}>{`📞 ${u.phone}`}</Text>
+                                  : <Text style={styles.studentDetailMissing}>{'📞 Phone not provided'}</Text>
+                                }
+                                {u.department
+                                  ? <Text style={styles.studentDetail}>{`📚 ${u.department}`}</Text>
+                                  : null}
+                                {u.year
+                                  ? <Text style={styles.studentDetail}>{`📅 ${u.year}`}</Text>
+                                  : <Text style={styles.studentDetailMissing}>{'📅 Year not provided'}</Text>
+                                }
+                                {u.college
+                                  ? <Text style={styles.studentDetail}>{`🏫 ${u.college}`}</Text>
+                                  : null}
+                              </View>
+                            </View>
                           </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.studentName}>{u.name}</Text>
-                            <Text style={styles.studentDetail}>{`✉️ ${u.email}`}</Text>
-                            {u.phone
-                              ? <Text style={styles.studentDetail}>{`📞 ${u.phone}`}</Text>
-                              : <Text style={styles.studentDetailMissing}>{'📞 Phone not provided'}</Text>
-                            }
-                            {u.department
-                              ? <Text style={styles.studentDetail}>{`📚 ${u.department}`}</Text>
-                              : null}
-                            {u.year
-                              ? <Text style={styles.studentDetail}>{`📅 ${u.year}`}</Text>
-                              : <Text style={styles.studentDetailMissing}>{'📅 Year not provided'}</Text>
-                            }
-                            {u.college
-                              ? <Text style={styles.studentDetail}>{`🏫 ${u.college}`}</Text>
-                              : null}
-                          </View>
-                        </View>
-                      </View>
-                    ))
-                  )}
-                </View>
+                        ))
+                      )}
+                    </View>
+                  ) : null}
+                </>
               ) : null}
 
-              {/* Delete Event button */}
-              <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
-                <Text style={styles.deleteEventBtnText}>{'🗑 Delete Event'}</Text>
-              </TouchableOpacity>
+              {/* Divider */}
+              <View style={styles.manageActionsContainer}>
+                <Text style={styles.manageActionsLabel}>{'⚙️ Manage Event'}</Text>
+
+                {/* Close / Reopen Registration button */}
+                <TouchableOpacity
+                  style={[
+                    styles.closeRegBtn,
+                    registrationClosed && styles.reopenRegBtn,
+                  ]}
+                  onPress={handleToggleRegistration}
+                  disabled={closeRegLoading}
+                >
+                  {closeRegLoading ? (
+                    <ActivityIndicator color={registrationClosed ? '#22c55e' : '#f97316'} />
+                  ) : (
+                    <Text style={[
+                      styles.closeRegBtnText,
+                      registrationClosed && styles.reopenRegBtnText,
+                    ]}>
+                      {registrationClosed ? '🔓 Reopen Registration' : '🔒 Close Registration'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Delete Event button */}
+                <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
+                  <Text style={styles.deleteEventBtnText}>{'🗑 Delete Event'}</Text>
+                </TouchableOpacity>
+              </View>
+
             </View>
           ) : null}
 
@@ -550,6 +645,14 @@ export default function EventDetails() {
           ) : isFull ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>{'🔴 Registrations Closed — Event Full'}</Text>
+            </View>
+          ) : registrationClosed ? (
+            // Manual close by organizer/admin
+            <View style={styles.regClosedBadge}>
+              <Text style={styles.regClosedBadgeText}>{'🔒 Registration Closed'}</Text>
+              <Text style={styles.regClosedBadgeSub}>
+                {'Registration has been closed by the organizer.'}
+              </Text>
             </View>
           ) : (
             <View style={styles.ctaContainer}>
@@ -683,6 +786,19 @@ const styles = StyleSheet.create({
 
   content: { paddingHorizontal: 20, paddingTop: 20 },
 
+  // Registration closed banner (top of content)
+  regClosedBanner: {
+    backgroundColor: '#1a0a2e',
+    borderWidth: 1,
+    borderColor: '#7c3aed',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  regClosedBannerText: { color: '#a78bfa', fontSize: 13, fontWeight: '600', lineHeight: 20 },
+
   deadlineBanner: {
     backgroundColor: '#2a1500',
     borderWidth: 1,
@@ -735,6 +851,47 @@ const styles = StyleSheet.create({
   studentDetail: { color: '#aaa', fontSize: 13, marginBottom: 2 },
   studentDetailMissing: { color: '#555', fontSize: 13, marginBottom: 2, fontStyle: 'italic' },
 
+  // Manage actions area inside organizer section
+  manageActionsContainer: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+    gap: 10,
+  },
+  manageActionsLabel: {
+    color: '#666', fontSize: 11, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
+  },
+
+  // Close Registration button
+  closeRegBtn: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#1a0a00',
+    borderWidth: 1,
+    borderColor: '#f97316',
+    alignItems: 'center',
+  },
+  closeRegBtnText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
+
+  // Reopen Registration button
+  reopenRegBtn: {
+    backgroundColor: '#052e16',
+    borderColor: '#22c55e',
+  },
+  reopenRegBtnText: { color: '#22c55e' },
+
+  deleteEventBtn: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2a0a0a',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    alignItems: 'center',
+  },
+  deleteEventBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
+
   sectionHeading: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   description: { color: '#cccccc', fontSize: 15, lineHeight: 24, marginBottom: 28 },
 
@@ -786,16 +943,20 @@ const styles = StyleSheet.create({
     padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10,
   },
   fullBadgeText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
-  noLinkNote: { color: '#555', fontSize: 12, textAlign: 'center' },
 
-  deleteEventBtn: {
-    marginTop: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#2a0a0a',
-    borderWidth: 1,
-    borderColor: '#ef4444',
+  // Registration closed badge shown to students in CTA area
+  regClosedBadge: {
+    backgroundColor: '#1a0a2e',
+    borderWidth: 1.5,
+    borderColor: '#7c3aed',
+    padding: 16,
+    borderRadius: 14,
     alignItems: 'center',
+    marginBottom: 10,
+    gap: 6,
   },
-  deleteEventBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
+  regClosedBadgeText: { color: '#a78bfa', fontSize: 15, fontWeight: 'bold' },
+  regClosedBadgeSub: { color: '#7c3aed', fontSize: 12 },
+
+  noLinkNote: { color: '#555', fontSize: 12, textAlign: 'center' },
 });

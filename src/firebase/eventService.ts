@@ -32,7 +32,8 @@ export type Event = {
   deadline?: string;
   seatLimit?: number | null;
   posterUrl?: string | null;
-   eventDate?: string;
+  eventDate?: string;
+  registrationClosed?: boolean;
 };
 
 // ── Create Event ──────────────────────────────────────────────────────────────
