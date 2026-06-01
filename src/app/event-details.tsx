@@ -41,12 +41,10 @@ type UserProfile = {
   college?: string;
 };
 
-// Helper to safely convert any value to a display string
 const toDisplayString = (value: any): string => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
-  // Firestore Timestamp
   if (value?.toDate && typeof value.toDate === 'function') {
     return value.toDate().toLocaleString([], {
       day: 'numeric',
@@ -100,18 +98,23 @@ export default function EventDetails() {
         const userSnap = await getDoc(doc(db, 'users', currentUid));
         const userData = userSnap.exists() ? userSnap.data() : null;
 
-        // Check admin
+        console.log('userData role:', userData?.role);
+        console.log('userData status:', userData?.status);
+        console.log('evt.createdBy:', evt.createdBy);
+        console.log('currentUid:', currentUid);
+
         if (userData?.role === 'admin') {
           setIsAdmin(true);
+          console.log('SET isAdmin = true');
         }
 
-        // Check organizer
         if (
           evt.createdBy === currentUid &&
           userData?.role === 'organizer' &&
           userData?.status === 'approved'
         ) {
           setIsOrganizer(true);
+          console.log('SET isOrganizer = true');
         }
 
         if (evt.interestedUsers?.includes(currentUid)) {
@@ -129,8 +132,6 @@ export default function EventDetails() {
   const count = event?.registeredUsers?.length ?? 0;
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
-
-  // registrationClosed is a manual override stored in Firestore
   const registrationClosed = event?.registrationClosed === true;
 
   const deadlinePassed = event?.deadline
@@ -142,10 +143,18 @@ export default function EventDetails() {
 
   // ── CLOSE / REOPEN REGISTRATION ──────────────────────────────────────────────
   const handleToggleRegistration = async () => {
-    const eventId = Array.isArray(id) ? id[0] : id;
-    if (!eventId) return;
+    console.log('=== handleToggleRegistration called ===');
+    console.log('isOrganizer:', isOrganizer);
+    console.log('isAdmin:', isAdmin);
+    console.log('canManage:', isOrganizer || isAdmin);
+    console.log('registrationClosed:', registrationClosed);
+    console.log('event id:', id);
 
-    const action = registrationClosed ? 'reopen' : 'close';
+    const eventId = Array.isArray(id) ? id[0] : id;
+    if (!eventId) {
+      console.log('NO EVENT ID - returning early');
+      return;
+    }
 
     Alert.alert(
       registrationClosed ? 'Reopen Registration?' : 'Close Registration?',
@@ -158,20 +167,24 @@ export default function EventDetails() {
           text: registrationClosed ? 'Reopen' : 'Close',
           style: registrationClosed ? 'default' : 'destructive',
           onPress: async () => {
+            console.log('Alert confirmed, writing to Firestore...');
             setCloseRegLoading(true);
             try {
               await updateDoc(doc(db, 'events', eventId), {
                 registrationClosed: !registrationClosed,
               });
+              console.log('Firestore write successful');
               const updated = await fetchEventById(eventId);
+              console.log('Updated registrationClosed:', updated?.registrationClosed);
               setEvent(updated);
               Alert.alert(
-                action === 'close' ? 'Registration Closed' : 'Registration Reopened',
-                action === 'close'
-                  ? 'No new registrations will be accepted.'
-                  : 'Students can now register again.'
+                registrationClosed ? 'Registration Reopened' : 'Registration Closed',
+                registrationClosed
+                  ? 'Students can now register again.'
+                  : 'No new registrations will be accepted.'
               );
             } catch (err: any) {
+              console.log('FIRESTORE ERROR:', err.code, err.message);
               Alert.alert('Error', err.message);
             } finally {
               setCloseRegLoading(false);
@@ -412,7 +425,6 @@ export default function EventDetails() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Floating top bar */}
       <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.floatingHeaderBtn}>
           <Text style={styles.floatingHeaderBtnText}>{'← Back'}</Text>
@@ -480,10 +492,8 @@ export default function EventDetails() {
           </View>
         </View>
 
-        {/* Content below hero */}
         <View style={styles.content}>
 
-          {/* Registration Closed banner — visible to everyone */}
           {registrationClosed ? (
             <View style={styles.regClosedBanner}>
               <Text style={styles.regClosedBannerText}>
@@ -492,7 +502,6 @@ export default function EventDetails() {
             </View>
           ) : null}
 
-          {/* Deadline warning banner */}
           {deadlineSoon && !isRegistered && deadlineDisplay ? (
             <View style={styles.deadlineBanner}>
               <Text style={styles.deadlineBannerText}>
@@ -501,7 +510,6 @@ export default function EventDetails() {
             </View>
           ) : null}
 
-          {/* Info Card */}
           <View style={styles.infoCard}>
             <InfoRow icon="📍" label="Venue" value={event.venue ?? 'TBA'} />
             <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)} />
@@ -511,7 +519,6 @@ export default function EventDetails() {
             ) : null}
           </View>
 
-          {/* Seat count card */}
           <View style={styles.countCard}>
             <Text style={styles.countNumber}>{count}</Text>
             <Text style={styles.countLabel}>
@@ -532,7 +539,6 @@ export default function EventDetails() {
           {canManage ? (
             <View style={styles.organizerSection}>
 
-              {/* Registered students — only organizer sees this */}
               {isOrganizer ? (
                 <>
                   <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
@@ -581,11 +587,9 @@ export default function EventDetails() {
                 </>
               ) : null}
 
-              {/* Divider */}
               <View style={styles.manageActionsContainer}>
                 <Text style={styles.manageActionsLabel}>{'⚙️ Manage Event'}</Text>
 
-                {/* Close / Reopen Registration button */}
                 <TouchableOpacity
                   style={[
                     styles.closeRegBtn,
@@ -606,7 +610,6 @@ export default function EventDetails() {
                   )}
                 </TouchableOpacity>
 
-                {/* Delete Event button */}
                 <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
                   <Text style={styles.deleteEventBtnText}>{'🗑 Delete Event'}</Text>
                 </TouchableOpacity>
@@ -615,13 +618,11 @@ export default function EventDetails() {
             </View>
           ) : null}
 
-          {/* Description */}
           <Text style={styles.sectionHeading}>{'About this Event'}</Text>
           <Text style={styles.description}>
             {event.description?.trim() ? event.description : 'No description provided yet.'}
           </Text>
 
-          {/* ── CTA Section ── */}
           {isRegistered ? (
             <View>
               <View style={styles.registeredBadge}>
@@ -647,7 +648,6 @@ export default function EventDetails() {
               <Text style={styles.fullBadgeText}>{'🔴 Registrations Closed — Event Full'}</Text>
             </View>
           ) : registrationClosed ? (
-            // Manual close by organizer/admin
             <View style={styles.regClosedBadge}>
               <Text style={styles.regClosedBadgeText}>{'🔒 Registration Closed'}</Text>
               <Text style={styles.regClosedBadgeSub}>
@@ -786,7 +786,6 @@ const styles = StyleSheet.create({
 
   content: { paddingHorizontal: 20, paddingTop: 20 },
 
-  // Registration closed banner (top of content)
   regClosedBanner: {
     backgroundColor: '#1a0a2e',
     borderWidth: 1,
@@ -794,8 +793,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   regClosedBannerText: { color: '#a78bfa', fontSize: 13, fontWeight: '600', lineHeight: 20 },
 
@@ -851,7 +848,6 @@ const styles = StyleSheet.create({
   studentDetail: { color: '#aaa', fontSize: 13, marginBottom: 2 },
   studentDetailMissing: { color: '#555', fontSize: 13, marginBottom: 2, fontStyle: 'italic' },
 
-  // Manage actions area inside organizer section
   manageActionsContainer: {
     marginTop: 16,
     paddingTop: 14,
@@ -864,7 +860,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
   },
 
-  // Close Registration button
   closeRegBtn: {
     paddingVertical: 12,
     borderRadius: 10,
@@ -874,12 +869,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeRegBtnText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
-
-  // Reopen Registration button
-  reopenRegBtn: {
-    backgroundColor: '#052e16',
-    borderColor: '#22c55e',
-  },
+  reopenRegBtn: { backgroundColor: '#052e16', borderColor: '#22c55e' },
   reopenRegBtnText: { color: '#22c55e' },
 
   deleteEventBtn: {
@@ -899,17 +889,10 @@ const styles = StyleSheet.create({
   btnInner: { alignItems: 'center', gap: 3 },
 
   interestButton: {
-    backgroundColor: '#1e1b4b',
-    borderWidth: 1.5,
-    borderColor: '#4f46e5',
-    padding: 16,
-    borderRadius: 14,
-    alignItems: 'center',
+    backgroundColor: '#1e1b4b', borderWidth: 1.5, borderColor: '#4f46e5',
+    padding: 16, borderRadius: 14, alignItems: 'center',
   },
-  interestButtonUrgent: {
-    backgroundColor: '#2a1500',
-    borderColor: '#f97316',
-  },
+  interestButtonUrgent: { backgroundColor: '#2a1500', borderColor: '#f97316' },
   interestButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
   interestButtonSub: { color: '#888', fontSize: 11, marginTop: 2 },
 
@@ -944,16 +927,9 @@ const styles = StyleSheet.create({
   },
   fullBadgeText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
 
-  // Registration closed badge shown to students in CTA area
   regClosedBadge: {
-    backgroundColor: '#1a0a2e',
-    borderWidth: 1.5,
-    borderColor: '#7c3aed',
-    padding: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 6,
+    backgroundColor: '#1a0a2e', borderWidth: 1.5, borderColor: '#7c3aed',
+    padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10, gap: 6,
   },
   regClosedBadgeText: { color: '#a78bfa', fontSize: 15, fontWeight: 'bold' },
   regClosedBadgeSub: { color: '#7c3aed', fontSize: 12 },
