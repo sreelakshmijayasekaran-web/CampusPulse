@@ -289,35 +289,26 @@ if (!supported) {
       ]
     );
   };
-  const handleCloseRegistration = async () => {
+  const handleToggleRegistration = async () => {
   try {
-    console.log("STEP 1 - Button clicked");
-    Alert.alert("STEP 1");
-
-    console.log("Event ID:", id);
-
     await updateDoc(doc(db, "events", id!), {
-      registrationClosed: true,
+      registrationClosed: !event?.registrationClosed,
     });
 
-    console.log("STEP 2 - Firestore updated");
-    Alert.alert("STEP 2");
-
-    const updated = await fetchEventById(id!);
-
-    console.log("STEP 3 - Event reloaded");
-    Alert.alert("STEP 3");
-
-    setEvent(updated);
-
     Alert.alert(
-      "Registration Closed",
-      "Students can no longer register for this event."
+      event?.registrationClosed
+        ? "Registration Opened"
+        : "Registration Closed",
+      event?.registrationClosed
+        ? "Students can register again."
+        : "Students can no longer register."
     );
 
+    const updated = await fetchEventById(id!);
+    setEvent(updated);
+
   } catch (err: any) {
-    console.log("CLOSE ERROR:", err);
-    Alert.alert("Error", JSON.stringify(err));
+    Alert.alert("Error", err.message);
   }
 };
 //Deleting the event
@@ -617,12 +608,14 @@ if (!supported) {
   onPress={() => {
     console.log("BUTTON PRESSED");
     Alert.alert("Button Pressed");
-    handleCloseRegistration();
+    handleToggleRegistration();
   }}
 >
   <Text style={styles.closeRegistrationBtnText}>
-    🚫 Close Registration
-  </Text>
+  {event?.registrationClosed
+    ? "✅ Open Registration"
+    : "🚫 Close Registration"}
+</Text>
 </TouchableOpacity>
 
 {/* Delete Event button */}
