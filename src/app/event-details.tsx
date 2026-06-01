@@ -224,17 +224,7 @@ export default function EventDetails() {
       pendingRegistrations: arrayUnion(currentUid),
     });
 
-    // Create prefilled Google Form URL
-       const baseUrl = event?.registerLink?.split('?')[0];
-
-const formLink =
-  `${baseUrl}?usp=pp_url` +
-  `&entry.1686065494=${encodeURIComponent(userData.name || '')}` +
-  `&entry.1256362250=${encodeURIComponent(userData.department || '')}` +
-  `&entry.1005576141=${encodeURIComponent(userData.email || '')}` +
-  `&entry.1281986389=${encodeURIComponent(id!)}` +
-  `&entry.1849380601=${encodeURIComponent(currentUid)}`;
-
+    const formLink = event?.registerLink;
     // Open Google Form
     console.log("EVENT:", event);
     console.log("REGISTER LINK:", event?.registerLink);
