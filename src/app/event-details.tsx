@@ -1,5 +1,5 @@
 // app/event-details.tsx
-
+import { AppState } from "react-native";
 import { router, useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
@@ -105,6 +105,26 @@ export default function EventDetails() {
     };
     load();
   }, [id]);
+  useEffect(() => {
+  const subscription = AppState.addEventListener(
+    "change",
+    (nextState) => {
+
+      if (
+        nextState === "active" &&
+        global.registrationInProgress
+      ) {
+        global.registrationInProgress = false;
+
+        router.push(
+          `/registration-confirmation?eventId=${global.registrationEventId}`
+        );
+      }
+    }
+  );
+
+  return () => subscription.remove();
+}, []);
 
   // User is in registeredUsers → fully registered
   const isRegistered = event?.registeredUsers?.includes(currentUid ?? '') ?? false;
@@ -173,81 +193,126 @@ export default function EventDetails() {
   // ── REGISTER NOW ─────────────────────────────────────────────────────────────
   // Adds user to registeredUsers[] AND sends confirmation + deadline notification immediately
     const handleRegisterNow = async () => {
-    
-      if (
-  event?.deadline &&
-  new Date(event.deadline) < new Date()
-) {
-  Alert.alert(
-    "Registration Closed",
-    "The registration deadline has passed."
-  );
-  return;
-}
+  console.log("REGISTER BUTTON CLICKED");
+
+  if (event?.deadline && new Date(event.deadline) < new Date()) {
+    Alert.alert(
+      "Registration Closed",
+      "The registration deadline has passed."
+    );
+    return;
+  }
+
   if (!currentUid) {
-    Alert.alert('Login required', 'Please log in first.');
+    Alert.alert("Login required", "Please log in first.");
     return;
   }
 
   if (isFull) {
-    Alert.alert('Event Full', 'Sorry, this event has reached its seat limit.');
+    Alert.alert(
+      "Event Full",
+      "Sorry, this event has reached its seat limit."
+    );
     return;
   }
+
+  console.log("Passed initial checks");
 
   setRegisterLoading(true);
 
   try {
-    // Fresh event check
+    console.log("Fetching fresh event...");
+
     const fresh = await fetchEventById(id!);
+
+    console.log("Fresh event:", fresh);
 
     const freshCount = fresh?.registeredUsers?.length ?? 0;
     const freshLimit = fresh?.seatLimit ?? null;
 
+    console.log("freshCount =", freshCount);
+    console.log("freshLimit =", freshLimit);
+
     if (freshLimit !== null && freshCount >= freshLimit) {
-      Alert.alert('Event Full', 'Sorry, no seats left.');
+      Alert.alert("Event Full", "Sorry, no seats left.");
       setRegisterLoading(false);
       return;
     }
 
-    // Get current user details
-    const userSnap = await getDoc(doc(db, 'users', currentUid));
+    console.log("Before getDoc");
+
+    const userSnap = await getDoc(
+      doc(db, "users", currentUid)
+    );
+
+    console.log("After getDoc");
 
     if (!userSnap.exists()) {
-      Alert.alert('Error', 'User profile not found.');
+      console.log("User document not found");
+      Alert.alert("Error", "User profile not found.");
       return;
     }
 
+    console.log("User exists");
+
     const userData = userSnap.data();
 
-    // Add user to pending registrations
-    await updateDoc(doc(db, 'events', id!), {
+    console.log("User data =", userData);
+
+    console.log("Before updateDoc");
+
+    await updateDoc(doc(db, "events", id!), {
       pendingRegistrations: arrayUnion(currentUid),
     });
 
-    const formLink = event?.registerLink;
-    // Open Google Form
-    console.log("EVENT:", event);
-    console.log("REGISTER LINK:", event?.registerLink);
-    console.log("FORM LINK:", formLink);
-    console.log("FORM LINK =", formLink);
+    console.log("After updateDoc");
 
-const supported = await Linking.canOpenURL(formLink);
+    const formLink = event?.registerLink?.trim();
 
-console.log("CAN OPEN =", supported);
+    console.log("Form link =", formLink);
 
-if (!supported) {
-  Alert.alert("Cannot open form link");
-  return;
-}
+    if (!formLink) {
+      Alert.alert(
+        "Error",
+        "No registration link found for this event."
+      );
+      return;
+    }
+
+    console.log("Before canOpenURL");
+
+    const supported = await Linking.canOpenURL(formLink);
+
+    console.log("CAN OPEN =", supported);
+
+    if (!supported) {
+      Alert.alert("Cannot open form link");
+      return;
+    }
+
+    console.log("Opening URL");
+    global.registrationInProgress = true;
+    global.registrationEventId = id;
     await Linking.openURL(formLink);
+    router.push(
+  `/registration-confirmation?eventId=${id}`
+);
+    console.log("URL opened successfully");
 
     Alert.alert(
-      'Complete Registration',
-      'Please submit the Google Form to complete your registration.'
+      "Complete Registration",
+      "Please submit the Google Form to complete your registration."
     );
 
   } catch (err: any) {
-    Alert.alert('Error', err.message);
+    console.log("REGISTER ERROR =", err);
+    console.log("REGISTER ERROR MESSAGE =", err?.message);
+    console.log("REGISTER ERROR CODE =", err?.code);
+
+    Alert.alert(
+      "Error",
+      err?.message || "Unknown error"
+    );
   } finally {
     setRegisterLoading(false);
   }
@@ -349,6 +414,7 @@ if (!supported) {
       err.message
     );
   }
+};
   const handleCloseRegistration = async () => {
   try {
     await updateDoc(doc(db, "events", id!), {
@@ -372,7 +438,7 @@ if (!supported) {
     Alert.alert("Error", err.message);
   }
 };
-};
+
 
   const loadRegisteredStudents = async () => {
     if (!event?.registeredUsers?.length) return;
@@ -709,13 +775,16 @@ if (!supported) {
   </View>
 ) : (
   <TouchableOpacity
-    style={[
-      styles.registerButton,
-      deadlineSoon && styles.registerButtonUrgent,
-    ]}
-    onPress={handleRegisterNow}
-    disabled={registerLoading}
-  >
+  style={[
+    styles.registerButton,
+    deadlineSoon && styles.registerButtonUrgent,
+  ]}
+  onPress={() => {
+    console.log("REGISTER BUTTON PRESSED");
+    handleRegisterNow();
+  }}
+  disabled={registerLoading}
+>
     {registerLoading ? (
       <ActivityIndicator color="white" />
     ) : (
