@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Sidebar from '../components/Sidebar';
 import {
   ActivityIndicator,
   Image,
@@ -13,13 +12,25 @@ import {
 
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { Event, fetchEvents } from '../firebase/eventService';
 import { auth, db } from '../firebase/firebaseConfig';
+import { Colors, Gradients } from '../constants/theme';
 
 const CATEGORIES = ['All', 'Hackathon', 'Workshop', 'Seminar', 'Cultural', 'Sports', 'Other'];
+
+const CATEGORY_STYLES: Record<string, { bg: string; text: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  All: { bg: '#DBEAFE', text: '#1D4ED8', icon: 'sparkles-outline' },
+  Hackathon: { bg: '#E0F2FE', text: '#0369A1', icon: 'code-slash-outline' },
+  Workshop: { bg: '#DCFCE7', text: '#15803D', icon: 'construct-outline' },
+  Seminar: { bg: '#FEF3C7', text: '#B45309', icon: 'mic-outline' },
+  Cultural: { bg: '#FFE4E6', text: '#BE123C', icon: 'musical-notes-outline' },
+  Sports: { bg: '#F3E8FF', text: '#7E22CE', icon: 'football-outline' },
+  Other: { bg: '#F1F5F9', text: '#475569', icon: 'apps-outline' },
+};
 
 export default function HomeScreen() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -52,7 +63,6 @@ export default function HomeScreen() {
     return unsub;
   }, []);
 
-  // Live unread notification count
   useEffect(() => {
     if (!auth.currentUser) return;
     const q = query(
@@ -60,9 +70,7 @@ export default function HomeScreen() {
       where('uid', '==', auth.currentUser.uid),
       where('read', '==', false)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setUnreadCount(snap.size);
-    });
+    const unsub = onSnapshot(q, (snap) => setUnreadCount(snap.size));
     return unsub;
   }, [user]);
 
@@ -74,754 +82,701 @@ export default function HomeScreen() {
   }, []);
 
   const filteredEvents = events.filter((event) => {
+    const value = search.toLowerCase();
     const matchesSearch =
-      event.title.toLowerCase().includes(search.toLowerCase()) ||
-      event.venue.toLowerCase().includes(search.toLowerCase()) ||
-      event.club.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory =
-      selectedCategory === 'All' || event.category === selectedCategory;
+      event.title.toLowerCase().includes(value) ||
+      event.venue.toLowerCase().includes(value) ||
+      event.club.toLowerCase().includes(value);
+    const matchesCategory = selectedCategory === 'All' || event.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
-  /* ---------------- EVENT CATEGORIES ---------------- */
 
-const now = new Date();
-
-const happeningToday = filteredEvents.filter((event) => {
-  if (!event.time) return false;
-  console.log(event.time);
-
-  const eventDate = new Date(event.time);
-
-  return (
-    eventDate.toDateString() === now.toDateString()
-  );
-});
-
-const upcomingEvents = filteredEvents.filter((event) => {
-  if (!event.time?.includes('T')) return false;
-
-  const eventDate = new Date(event.time);
-
-  return eventDate > now;
-});
-
-const recentlyHappened = filteredEvents.filter((event) => {
-  if (!event.time?.includes('T')) return false;
-
-  const eventDate = new Date(event.time);
-
-  return eventDate < now;
-});
-const trendingEvents = [...filteredEvents].sort(
-  (a, b) =>
-    (b.registeredUsers?.length || 0) -
-    (a.registeredUsers?.length || 0)
-);
-
-  const formatDateTime = (dateTime: string) => {
-
-  if (!dateTime) return "";
-
-  const date = new Date(dateTime);
-
-  return date.toLocaleString([], {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
+  const now = new Date();
+  const happeningToday = filteredEvents.filter((event) => {
+    if (!event.time) return false;
+    return new Date(event.time).toDateString() === now.toDateString();
   });
-};
+  const upcomingEvents = filteredEvents.filter((event) => {
+    if (!event.time?.includes('T')) return false;
+    return new Date(event.time) > now;
+  });
+  const recentlyHappened = filteredEvents.filter((event) => {
+    if (!event.time?.includes('T')) return false;
+    return new Date(event.time) < now;
+  });
+  const trendingEvents = [...filteredEvents].sort(
+    (a, b) => (b.registeredUsers?.length || 0) - (a.registeredUsers?.length || 0)
+  );
+
+  const firstName = userName?.split(' ')[0] ?? 'there';
+
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <LinearGradient colors={Gradients.light.sunrise} style={styles.heroPanel}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/notifications')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="notifications-outline" size={22} color={Colors.light.primary} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-      {/* HEADER */}
-      <View style={styles.headerRow}>
-
-        {/* LEFT: Notification bell */}
-        <TouchableOpacity
-          style={styles.notifButton}
-          onPress={() => router.push('/notifications')}
-        >
-          <Ionicons name="notifications-outline" size={26} color="white" />
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
+          {user ? (
+            <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/profile')} activeOpacity={0.85}>
+              <Ionicons name="person-circle-outline" size={34} color={Colors.light.primary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.authRow}>
+              <Link href="/login" asChild>
+                <TouchableOpacity style={styles.loginButton} activeOpacity={0.85}>
+                  <Text style={styles.loginButtonText}>Log In</Text>
+                </TouchableOpacity>
+              </Link>
+              <Link href="/signup" asChild>
+                <TouchableOpacity activeOpacity={0.85}>
+                  <LinearGradient colors={Gradients.light.primary} style={styles.signupButton}>
+                    <Text style={styles.signupButtonText}>Sign Up</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Link>
             </View>
           )}
-        </TouchableOpacity>
-
-        {/* CENTER: App name + greeting */}
-        <View style={styles.centerHeader}>
-          <Text style={styles.heading}>CampusPulse</Text>
-          {user && userName && (
-            <Text style={styles.welcomeText}>
-              👋 Hey, {userName.split(' ')[0]}!
-            </Text>
-          )}
         </View>
-        {/* CREATE EVENT */}
+
+        <View style={styles.brandRow}>
+          <View style={styles.brandMark}>
+            <Ionicons name="radio-outline" size={24} color="white" />
+          </View>
+          <View>
+            <Text style={styles.eyebrow}>Campus social feed</Text>
+            <Text style={styles.heading}>CampusPulse</Text>
+          </View>
+        </View>
+
+        <Text style={styles.heroTitle}>{user ? `Hey ${firstName}, see what's buzzing.` : "See what's buzzing on campus."}</Text>
+        <Text style={styles.heroSub}>Events, clubs, workshops and campus moments in one colorful feed.</Text>
+
+        <View style={styles.statsRow}>
+          <StatChip label="Events" value={filteredEvents.length} color="#2563EB" />
+          <StatChip label="Today" value={happeningToday.length} color="#16A34A" />
+          <StatChip label="Trending" value={trendingEvents.length} color="#F97316" />
+        </View>
+      </LinearGradient>
+
       {role === 'organizer' && userStatus === 'approved' && (
         <Link href="/create-event" asChild>
-          <TouchableOpacity style={styles.createButton}>
-            <Text style={styles.buttonText}>＋ Create Event</Text>
+          <TouchableOpacity activeOpacity={0.85}>
+            <LinearGradient colors={Gradients.light.campus} style={styles.createButton}>
+              <Ionicons name="add-circle-outline" size={20} color="white" />
+              <Text style={styles.createButtonText}>Create Event</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </Link>
       )}
 
-        {/* RIGHT: Profile icon OR login/signup buttons */}
-        <View style={styles.rightHeader}>
-          {user ? (
-            <TouchableOpacity onPress={() => router.push('/profile')}>
-              <Ionicons name="person-circle-outline" size={38} color="white" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.authRow}>
-              <Link href="/signup" asChild>
-                <TouchableOpacity style={styles.signupButton}>
-                  <Text style={styles.buttonText}>Sign Up</Text>
-                </TouchableOpacity>
-              </Link>
-              <Link href="/login" asChild>
-                <TouchableOpacity style={styles.loginButton}>
-                  <Text style={styles.buttonText}>Log In</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          )}
-        </View>
-
-      </View>
-
-      {/* ADMIN */}
       {role === 'admin' && (
-        <TouchableOpacity
-          style={styles.adminButton}
-          onPress={() => router.push('/admin')}
-        >
-          <Text style={styles.adminButtonText}>🛡 Admin Panel</Text>
+        <TouchableOpacity style={styles.adminButton} onPress={() => router.push('/admin')} activeOpacity={0.85}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={Colors.light.primary} />
+          <Text style={styles.adminButtonText}>Admin Panel</Text>
         </TouchableOpacity>
       )}
 
-      {/* PENDING */}
       {role === 'organizer' && userStatus === 'pending' && (
         <View style={styles.pendingNotice}>
-          <Text style={styles.pendingText}>
-            ⏳ Your organizer account is pending admin approval.
-          </Text>
+          <Ionicons name="time-outline" size={18} color="#B45309" />
+          <Text style={styles.pendingText}>Your organizer account is pending admin approval.</Text>
         </View>
       )}
 
-      {/* SEARCH */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search-outline" size={18} color="#64748B" />
         <TextInput
           placeholder="Search events, venues, clubs..."
-          placeholderTextColor="#555"
+          placeholderTextColor="#8A94A6"
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Text style={styles.clearBtn}>✕</Text>
+          <TouchableOpacity onPress={() => setSearch('')} style={styles.clearButton}>
+            <Ionicons name="close-outline" size={18} color="#64748B" />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* CATEGORY */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroll}
-        contentContainerStyle={styles.categoryContent}
-      >
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.categoryTag, selectedCategory === cat && styles.categoryTagActive]}
-            onPress={() => setSelectedCategory(cat)}
-          >
-            <Text style={[styles.categoryText, selectedCategory === cat && styles.categoryTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryContent}>
+        {CATEGORIES.map((cat) => {
+          const isActive = selectedCategory === cat;
+          const palette = CATEGORY_STYLES[cat];
+          return (
+            <TouchableOpacity
+              key={cat}
+              onPress={() => setSelectedCategory(cat)}
+              activeOpacity={0.85}
+              style={[
+                styles.categoryTag,
+                { backgroundColor: palette.bg, borderColor: isActive ? palette.text : 'transparent' },
+                isActive && styles.categoryTagActive,
+              ]}
+            >
+              <Ionicons name={palette.icon} size={15} color={palette.text} />
+              <Text style={[styles.categoryText, { color: palette.text }]}>{cat}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      
-
-      <Text style={styles.subheading}>
-        {selectedCategory === 'All' ? 'Upcoming Events' : selectedCategory}
-        {search.length > 0 ? ` · "${search}"` : ''}
-      </Text>
-
-      {/* ⚡ HAPPENING TODAY */}
-
-<Text style={styles.subheading}>⚡ Happening Today</Text>
-
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.posterRow}
->
-  {happeningToday.map((event) => {
-    const taken = event.registeredUsers?.length ?? 0;
-
-    return (
-      <TouchableOpacity
-        key={event.id}
-        style={styles.posterCard}
-        onPress={() => router.push(`/event-details?id=${event.id}`)}
-        activeOpacity={0.85}
-      >
-
-        {event.posterUrl ? (
-          <Image
-            source={{ uri: event.posterUrl }}
-            style={styles.posterImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.posterPlaceholder}>
-            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
-          </View>
-        )}
-
-        <View style={styles.posterBadge}>
-          <Text style={styles.posterBadgeText}>LIVE</Text>
+      {loadingEvents ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={Colors.light.primary} size="large" />
+          <Text style={styles.loadingText}>Loading campus buzz...</Text>
         </View>
+      ) : (
+        <>
+          <EventSection title="Happening Today" icon="flash-outline" events={happeningToday} status="LIVE" accent="#16A34A" />
+          <EventSection title="Upcoming Events" icon="calendar-outline" events={upcomingEvents} status="UPCOMING" accent="#2563EB" />
+          <EventSection title="Trending Now" icon="flame-outline" events={trendingEvents} status="TRENDING" accent="#F97316" />
+          <EventSection title="Recently Happened" icon="checkmark-done-outline" events={recentlyHappened} status="ENDED" accent="#64748B" faded />
 
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
+          {filteredEvents.length === 0 && (
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="search-outline" size={30} color={Colors.light.primary} />
+              </View>
+              <Text style={styles.emptyText}>No events found</Text>
+              <Text style={styles.emptySubtext}>Try another keyword or category.</Text>
+            </View>
+          )}
+        </>
+      )}
 
-          <Text style={styles.posterSub}>
-            🕒 {formatDateTime(event.time)}
-          </Text>
-
-          <Text style={styles.posterCount}>
-            👥 {taken} registered
-          </Text>
-        </View>
-
-      </TouchableOpacity>
-    );
-  })}
-</ScrollView>
-
-
-{/* 🚀 UPCOMING EVENTS */}
-
-<Text style={styles.subheading}>🚀 Upcoming Events</Text>
-
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.posterRow}
->
-  {upcomingEvents.map((event) => {
-    const taken = event.registeredUsers?.length ?? 0;
-
-    return (
-      <TouchableOpacity
-        key={event.id}
-        style={styles.posterCard}
-        onPress={() => router.push(`/event-details?id=${event.id}`)}
-        activeOpacity={0.85}
-      >
-
-        {event.posterUrl ? (
-          <Image
-            source={{ uri: event.posterUrl }}
-            style={styles.posterImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.posterPlaceholder}>
-            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
-          </View>
-        )}
-
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
-
-          <Text style={styles.posterSub}>
-            🕒 {formatDateTime(event.time)}
-          </Text>
-
-          <Text style={styles.posterCount}>
-            👥 {taken} registered
-          </Text>
-        </View>
-
-      </TouchableOpacity>
-    );
-  })}
-</ScrollView>
-
-
-{/* 🔥 TRENDING EVENTS */}
-
-<Text style={styles.subheading}>🔥 Trending Events</Text>
-
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.posterRow}
->
-  {trendingEvents.map((event) => {
-    const taken = event.registeredUsers?.length ?? 0;
-
-    return (
-      <TouchableOpacity
-        key={event.id}
-        style={styles.posterCard}
-        onPress={() => router.push(`/event-details?id=${event.id}`)}
-        activeOpacity={0.85}
-      >
-
-        {event.posterUrl ? (
-          <Image
-            source={{ uri: event.posterUrl }}
-            style={styles.posterImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.posterPlaceholder}>
-            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
-          </View>
-        )}
-
-        <View style={styles.posterBadge}>
-          <Text style={styles.posterBadgeText}>TRENDING</Text>
-        </View>
-
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
-
-          <Text style={styles.posterSub}>
-            🕒 {formatDateTime(event.time)}
-          </Text>
-
-          <Text style={styles.posterCount}>
-            🔥 {taken} registrations
-          </Text>
-        </View>
-
-      </TouchableOpacity>
-    );
-  })}
-</ScrollView>
-
-
-{/* 🎉 RECENTLY HAPPENED */}
-
-<Text style={styles.subheading}>🎉 Recently Happened</Text>
-
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.posterRow}
->
-  {recentlyHappened.map((event) => {
-
-    return (
-      <TouchableOpacity
-        key={event.id}
-        style={[styles.posterCard, { opacity: 0.7 }]}
-        activeOpacity={1}
-      >
-
-        {event.posterUrl ? (
-          <Image
-            source={{ uri: event.posterUrl }}
-            style={styles.posterImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.posterPlaceholder}>
-            <Text style={styles.posterPlaceholderEmoji}>📅</Text>
-          </View>
-        )}
-
-        <View
-          style={[
-            styles.posterBadge,
-            { backgroundColor: '#111' }
-          ]}
-        >
-          <Text style={styles.posterBadgeText}>
-            ENDED
-          </Text>
-        </View>
-
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
-
-          <Text style={styles.posterSub}>
-            Event completed
-          </Text>
-
-          <Text
-            style={[
-              styles.posterCount,
-              { color: '#999' }
-            ]}
-          >
-            Registration Closed
-          </Text>
-        </View>
-
-      </TouchableOpacity>
-    );
-  })}
-</ScrollView>
-
-      <View style={{ height: 40 }} />
+      <View style={{ height: 32 }} />
     </ScrollView>
+  );
+}
+
+function EventSection({
+  title,
+  icon,
+  events,
+  status,
+  accent,
+  faded,
+}: {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  events: Event[];
+  status: string;
+  accent: string;
+  faded?: boolean;
+}) {
+  if (events.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: `${accent}18` }]}>
+          <Ionicons name={icon} size={18} color={accent} />
+        </View>
+        <Text style={styles.subheading}>{title}</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRow}>
+        {events.map((event) => (
+          <EventCard key={event.id} event={event} status={status} accent={accent} faded={faded} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function EventCard({ event, status, accent, faded }: { event: Event; status: string; accent: string; faded?: boolean }) {
+  const taken = event.registeredUsers?.length ?? 0;
+  const category = event.category || 'Other';
+  const palette = CATEGORY_STYLES[category] ?? CATEGORY_STYLES.Other;
+
+  return (
+    <TouchableOpacity
+      style={[styles.posterCard, faded && styles.fadedCard]}
+      onPress={() => router.push(`/event-details?id=${event.id}`)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.posterMedia}>
+        {event.posterUrl ? (
+          <Image source={{ uri: event.posterUrl }} style={styles.posterImage} resizeMode="cover" />
+        ) : (
+          <LinearGradient colors={[palette.bg, '#FFFFFF']} style={styles.posterPlaceholder}>
+            <Ionicons name={palette.icon} size={40} color={palette.text} />
+            <Text style={[styles.posterPlaceholderTitle, { color: palette.text }]} numberOfLines={2}>
+              {event.title}
+            </Text>
+          </LinearGradient>
+        )}
+        <View style={[styles.posterBadge, { backgroundColor: accent }]}>
+          <Text style={styles.posterBadgeText}>{status}</Text>
+        </View>
+      </View>
+
+      <View style={styles.posterInfo}>
+        <View style={[styles.categoryMini, { backgroundColor: palette.bg }]}>
+          <Text style={[styles.categoryMiniText, { color: palette.text }]}>{category}</Text>
+        </View>
+        <Text style={styles.posterTitle} numberOfLines={2}>{event.title}</Text>
+        <MetaRow icon="location-outline" text={event.venue} />
+        <MetaRow icon="business-outline" text={event.club} />
+        <View style={styles.cardFooter}>
+          <View style={styles.peoplePill}>
+            <Ionicons name="people-outline" size={14} color={Colors.light.success} />
+            <Text style={styles.posterCount}>{taken}</Text>
+          </View>
+          <Ionicons name="arrow-forward-circle" size={24} color={accent} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function MetaRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.metaRow}>
+      <Ionicons name={icon} size={13} color={Colors.light.textSecondary} />
+      <Text style={styles.posterSub} numberOfLines={1}>{text}</Text>
+    </View>
+  );
+}
+
+function StatChip({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.statChip}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingTop: 60,
-    paddingHorizontal: 20,
+    backgroundColor: Colors.light.background,
   },
-
-  headerRow: {
+  content: {
+    paddingTop: 54,
+    paddingHorizontal: 18,
+  },
+  heroPanel: {
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 5,
+  },
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 18,
   },
-
-  notifButton: {
+  iconButton: {
     position: 'relative',
     width: 42,
     height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ff5a1f',
-    borderRadius: 14,
   },
-
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#111',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    top: 2,
+    right: 2,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: Colors.light.error,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
-
   badgeText: {
     color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontFamily: 'Sora_700Bold',
   },
-
-  centerHeader: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  rightHeader: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  profileButton: {
     width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
-  heading: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#111',
-    letterSpacing: 0.5,
-  },
-
-  welcomeText: {
-    color: '#666',
-    fontSize: 13,
-    marginTop: 4,
-  },
-
   authRow: {
     flexDirection: 'row',
     gap: 8,
   },
-
-  signupButton: {
-    backgroundColor: '#ff5a1f',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-  },
-
   loginButton: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 14,
   },
-
-  buttonText: {
-    color: '#111',
-    fontSize: 13,
-    fontWeight: '700',
+  loginButtonText: {
+    color: Colors.light.text,
+    fontSize: 12,
+    fontFamily: 'Sora_700Bold',
   },
-
-  adminButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ff5a1f',
-    padding: 14,
-    borderRadius: 18,
+  signupButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+  },
+  signupButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontFamily: 'Sora_700Bold',
+  },
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
+    gap: 12,
+    marginBottom: 14,
   },
-
-  adminButtonText: {
-    color: '#ff5a1f',
-    fontWeight: '700',
-    fontSize: 15,
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
-  pendingNotice: {
-    backgroundColor: '#fff4ed',
+  eyebrow: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+  },
+  heading: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 24,
+    color: Colors.light.text,
+  },
+  heroTitle: {
+    color: Colors.light.text,
+    fontSize: 27,
+    lineHeight: 34,
+    fontFamily: 'Sora_700Bold',
+    maxWidth: 330,
+  },
+  heroSub: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'Sora_400Regular',
+    marginTop: 8,
+    maxWidth: 330,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  statChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderRadius: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+  },
+  statValue: {
+    fontSize: 18,
+    fontFamily: 'Sora_700Bold',
+  },
+  statLabel: {
+    color: Colors.light.textSecondary,
+    fontSize: 10,
+    fontFamily: 'Sora_600SemiBold',
+    marginTop: 1,
+  },
+  createButton: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 18,
+    marginBottom: 14,
+  },
+  createButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#ffb088',
+    borderColor: '#BFDBFE',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 14,
+  },
+  adminButtonText: {
+    color: Colors.light.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+  },
+  pendingNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 18,
+    marginBottom: 14,
   },
-
   pendingText: {
-    color: '#ff5a1f',
+    color: '#92400E',
+    fontFamily: 'Sora_500Medium',
     fontSize: 13,
+    flex: 1,
   },
-
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    paddingHorizontal: 16,
-    marginBottom: 18,
+    paddingHorizontal: 15,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#ececec',
+    borderColor: Colors.light.border,
+    minHeight: 52,
   },
-
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-
   searchInput: {
     flex: 1,
-    color: '#111',
-    fontSize: 15,
-    paddingVertical: 14,
-  },
-
-  clearBtn: {
-    color: '#999',
-    fontSize: 16,
-    paddingLeft: 8,
-  },
-
-  categoryScroll: {
-    marginBottom: 20,
-  },
-
-  categoryContent: {
-    gap: 10,
-    paddingRight: 8,
-  },
-
-  categoryTag: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#ececec',
-  },
-
-  categoryTagActive: {
-    backgroundColor: '#ff5a1f',
-    borderColor: '#ff5a1f',
-  },
-
-  categoryText: {
-    color: '#666',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-
-  categoryTextActive: {
-    color: 'white',
-  },
-
-  createButton: {
-    backgroundColor: '#ff5a1f',
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_400Regular',
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 16,
+    marginLeft: 8,
   },
-
-  subheading: {
-    color: '#666',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 18,
-  },
-
-  posterRow: {
-    paddingRight: 20,
-    paddingBottom: 20,
-    gap: 18,
-  },
-
-  posterCard: {
-    width: 180,
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#ececec',
-  },
-
-  posterImage: {
-    width: 180,
-    height: 260,
-  },
-
-  posterPlaceholder: {
-    width: 180,
-    height: 260,
-    backgroundColor: '#fff4ed',
+  clearButton: {
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 14,
+  },
+  categoryScroll: {
+    marginBottom: 18,
+  },
+  categoryContent: {
+    gap: 9,
+    paddingRight: 8,
+  },
+  categoryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    borderWidth: 1.5,
+  },
+  categoryTagActive: {
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 12,
+  },
+  loadingBox: {
+    alignItems: 'center',
+    paddingVertical: 56,
+  },
+  loadingText: {
+    marginTop: 12,
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 12,
+  },
+  section: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginBottom: 12,
+  },
+  sectionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subheading: {
+    color: Colors.light.text,
+    fontSize: 16,
+    fontFamily: 'Sora_700Bold',
+  },
+  posterRow: {
+    paddingRight: 18,
+    paddingBottom: 18,
+    gap: 14,
+  },
+  posterCard: {
+    width: 214,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F8DED0',
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  fadedCard: {
+    opacity: 0.72,
+  },
+  posterMedia: {
+    height: 164,
+    position: 'relative',
+    backgroundColor: '#F8FAFC',
+  },
+  posterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  posterPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
     gap: 10,
   },
-
-  posterPlaceholderEmoji: {
-    fontSize: 42,
-  },
-
   posterPlaceholderTitle: {
-    color: '#111',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 19,
   },
-
-  posterPlaceholderClub: {
-    color: '#ff5a1f',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-
   posterBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: '#ff5a1f',
-    paddingHorizontal: 10,
+    top: 12,
+    left: 12,
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 10,
   },
-
   posterBadgeText: {
     color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontFamily: 'Sora_700Bold',
   },
-
-  posterFullBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#111',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-
-  posterFullBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
   posterInfo: {
     padding: 14,
-    gap: 5,
+    gap: 8,
   },
-
+  categoryMini: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  categoryMiniText: {
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
   posterTitle: {
-    color: '#111',
+    color: Colors.light.text,
     fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 22,
+    fontFamily: 'Sora_700Bold',
+    lineHeight: 20,
+    minHeight: 40,
   },
-
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   posterSub: {
-    color: '#666',
-    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_400Regular',
+    flex: 1,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 2,
   },
-
-  posterCount: {
-    color: '#ff5a1f',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
+  peoplePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-
+  posterCount: {
+    color: Colors.light.success,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+  },
   emptyBox: {
     alignItems: 'center',
-    marginTop: 80,
+    marginTop: 36,
+    paddingHorizontal: 20,
+    paddingVertical: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
-
-  emptyEmoji: {
-    fontSize: 50,
-    marginBottom: 14,
+  emptyIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-
   emptyText: {
-    color: '#111',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 6,
+    color: Colors.light.text,
+    fontSize: 17,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 4,
   },
-
   emptySubtext: {
-    color: '#777',
-    fontSize: 14,
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+    fontFamily: 'Sora_400Regular',
+    textAlign: 'center',
   },
 });

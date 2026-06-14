@@ -34,6 +34,7 @@ export type Event = {
   posterUrl?: string | null;
   eventDate?: string;
   registrationClosed?: boolean;
+  pendingRegistrations?: string[];
 };
 
 // ── Create Event ──────────────────────────────────────────────────────────────

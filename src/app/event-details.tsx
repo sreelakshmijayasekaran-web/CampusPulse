@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Gradients } from '../constants/theme';
 import {
   Event,
   fetchEventById,
@@ -112,12 +113,12 @@ export default function EventDetails() {
 
       if (
         nextState === "active" &&
-        global.registrationInProgress
+        (global as any).registrationInProgress
       ) {
-        global.registrationInProgress = false;
+        (global as any).registrationInProgress = false;
 
         router.push(
-          `/registration-confirmation?eventId=${global.registrationEventId}`
+          `/registration-confirmation?eventId=${(global as any).registrationEventId}`
         );
       }
     }
@@ -291,8 +292,8 @@ export default function EventDetails() {
     }
 
     console.log("Opening URL");
-    global.registrationInProgress = true;
-    global.registrationEventId = id;
+    (global as any).registrationInProgress = true;
+    (global as any).registrationEventId = id;
     await Linking.openURL(formLink);
     router.push(
   `/registration-confirmation?eventId=${id}`
@@ -465,28 +466,24 @@ export default function EventDetails() {
     }
     setShowStudents((prev) => !prev);
   };
+
   const formatDateTime = (dateTime: string) => {
-
-  if (!dateTime) return "";
-
-  const date = new Date(dateTime);
-
-  return date.toLocaleString([], {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-    
+    if (!dateTime) return "";
+    const date = new Date(dateTime);
+    return date.toLocaleString([], {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#4f46e5" size="large" />
+        <ActivityIndicator color={Colors.light.primary} size="large" />
       </View>
     );
   }
@@ -504,7 +501,7 @@ export default function EventDetails() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
       {/* Floating top bar */}
       <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
@@ -538,15 +535,18 @@ export default function EventDetails() {
             {event.posterUrl ? (
               <Image source={{ uri: event.posterUrl }} style={styles.posterImage} resizeMode="cover" />
             ) : (
-              <View style={styles.posterPlaceholder}>
+              <LinearGradient
+                colors={Gradients.light.primary}
+                style={styles.posterPlaceholder}
+              >
                 <Text style={styles.posterPlaceholderText}>🎉</Text>
-              </View>
+              </LinearGradient>
             )}
           </Animated.View>
 
           <LinearGradient
-            colors={['transparent', 'rgba(18,18,18,0.6)', '#121212']}
-            locations={[0.4, 0.75, 1]}
+            colors={['transparent', 'rgba(248, 250, 252, 0.7)', Colors.light.background]}
+            locations={[0.3, 0.75, 1]}
             style={styles.heroGradient}
           />
 
@@ -577,7 +577,6 @@ export default function EventDetails() {
         {/* Content below hero */}
         <View style={styles.content}>
           
-
           {/* Deadline warning banner */}
           {deadlineSoon && !isRegistered && (
             <View style={styles.deadlineBanner}>
@@ -614,7 +613,7 @@ export default function EventDetails() {
             )}
           </View>
 
-          {/* Organizer: registered students */}
+          {/* Organizer Section: registered students */}
           {isOrganizer && (
             <View style={styles.organizerSection}>
               <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
@@ -627,7 +626,7 @@ export default function EventDetails() {
               {showStudents && (
                 <View style={styles.studentsList}>
                   {loadingUsers ? (
-                    <ActivityIndicator color="#4f46e5" style={{ marginTop: 10 }} />
+                    <ActivityIndicator color={Colors.light.primary} style={{ marginTop: 10 }} />
                   ) : registeredUsers.length === 0 ? (
                     <Text style={styles.noStudents}>No students have registered yet.</Text>
                   ) : (
@@ -658,26 +657,22 @@ export default function EventDetails() {
                 </View>
               )}
 
-              {/* Delete Event button */}
+              {/* Toggle Event status button */}
               <TouchableOpacity
-  style={styles.closeRegistrationBtn}
-  onPress={() => {
-    console.log("BUTTON PRESSED");
-    Alert.alert("Button Pressed");
-    handleToggleRegistration();
-  }}
->
-  <Text style={styles.closeRegistrationBtnText}>
-  {event?.registrationClosed
-    ? "✅ Open Registration"
-    : "🚫 Close Registration"}
-</Text>
-</TouchableOpacity>
+                style={styles.closeRegistrationBtn}
+                onPress={handleToggleRegistration}
+              >
+                <Text style={styles.closeRegistrationBtnText}>
+                  {event?.registrationClosed
+                    ? "✅ Open Registration"
+                    : "🚫 Close Registration"}
+                </Text>
+              </TouchableOpacity>
 
-{/* Delete Event button */}
-<TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
-  <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
-</TouchableOpacity>
+              {/* Delete Event button */}
+              <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
+                <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -700,27 +695,26 @@ export default function EventDetails() {
                 disabled={unregLoading}
               >
                 {unregLoading
-                  ? <ActivityIndicator color="#ef4444" />
+                  ? <ActivityIndicator color={Colors.light.error} />
                   : <Text style={styles.unregisterButtonText}>✕ Remove Registration</Text>
                 }
               </TouchableOpacity>
             </View>
-            ) : registrationClosed ? (
-  <View style={styles.fullBadge}>
-    <Text style={styles.fullBadgeText}>
-      🚫 Registration Closed By Organizer
-    </Text>
-  </View>
-            ) : (deadlinePassed || registrationClosed) ? (
-              <View style={styles.fullBadge}>
-                  <Text style={styles.fullBadgeText}>
-                      {registrationClosed
-                      ? "🚫 Registration Closed By Organizer"
-                      : "⛔ Registration Deadline Passed"}
-                  </Text>
-              </View>
-            ) 
-           : isFull ? (
+          ) : registrationClosed ? (
+            <View style={styles.fullBadge}>
+              <Text style={styles.fullBadgeText}>
+                🚫 Registration Closed By Organizer
+              </Text>
+            </View>
+          ) : (deadlinePassed || registrationClosed) ? (
+            <View style={styles.fullBadge}>
+              <Text style={styles.fullBadgeText}>
+                {registrationClosed
+                  ? "🚫 Registration Closed By Organizer"
+                  : "⛔ Registration Deadline Passed"}
+              </Text>
+            </View>
+          ) : isFull ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>🔴 Registrations Closed — Event Full</Text>
             </View>
@@ -736,22 +730,22 @@ export default function EventDetails() {
                   ]}
                   onPress={handleMarkInterest}
                   disabled={interestLoading}
+                  activeOpacity={0.85}
                 >
-                  {interestLoading
-                    ? <ActivityIndicator color="white" />
-                    : (
-                      <View style={styles.btnInner}>
-                        <Text style={styles.interestButtonText}>
-                          {deadlineSoon ? '⚡ Mark Interest — Closing Soon!' : '⭐ Mark Interest'}
-                        </Text>
-                        <Text style={styles.interestButtonSub}>
-                          {deadlineSoon
-                            ? 'You will get an immediate deadline alert'
-                            : 'Get a reminder 12h before deadline'}
-                        </Text>
-                      </View>
-                    )
-                  }
+                  {interestLoading ? (
+                    <ActivityIndicator color={Colors.light.primary} />
+                  ) : (
+                    <View style={styles.btnInner}>
+                      <Text style={styles.interestButtonText}>
+                        {deadlineSoon ? '⚡ Mark Interest — Closing Soon!' : '⭐ Mark Interest'}
+                      </Text>
+                      <Text style={styles.interestButtonSub}>
+                        {deadlineSoon
+                          ? 'You will get an immediate deadline alert'
+                          : 'Get a reminder 12h before deadline'}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               )}
 
@@ -764,44 +758,44 @@ export default function EventDetails() {
 
               {/* Register Now button — always shown when not registered */}
               {isPending ? (
-  <View style={styles.interestedBadge}>
-    <Text style={styles.interestedBadgeText}>
-      ⏳ Registration Pending
-    </Text>
-
-    <Text style={styles.interestButtonSub}>
-      Complete the Google Form to confirm registration
-    </Text>
-  </View>
-) : (
-  <TouchableOpacity
-  style={[
-    styles.registerButton,
-    deadlineSoon && styles.registerButtonUrgent,
-  ]}
-  onPress={() => {
-    console.log("REGISTER BUTTON PRESSED");
-    handleRegisterNow();
-  }}
-  disabled={registerLoading}
->
-    {registerLoading ? (
-      <ActivityIndicator color="white" />
-    ) : (
-      <View style={styles.btnInner}>
-        <Text style={styles.registerButtonText}>
-          {deadlineSoon
-            ? '🔥 Register Now — Closing Soon!'
-            : 'Register Now →'}
-        </Text>
-
-        <Text style={styles.registerButtonSub}>
-          Complete Google Form to confirm registration
-        </Text>
-      </View>
-    )}
-  </TouchableOpacity>
-)}
+                <View style={styles.interestedBadge}>
+                  <Text style={styles.interestedBadgeText}>
+                    ⏳ Registration Pending
+                  </Text>
+                  <Text style={styles.interestButtonSub}>
+                    Complete the Google Form to confirm registration
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.registerButton}
+                  onPress={handleRegisterNow}
+                  disabled={registerLoading}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={deadlineSoon ? ['#F97316', '#EA580C'] : Gradients.light.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.registerButtonGradient}
+                  >
+                    {registerLoading ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <View style={styles.btnInner}>
+                        <Text style={styles.registerButtonText}>
+                          {deadlineSoon
+                            ? '🔥 Register Now — Closing Soon!'
+                            : 'Register Now →'}
+                        </Text>
+                        <Text style={styles.registerButtonSub}>
+                          Complete Google Form to confirm registration
+                        </Text>
+                      </View>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
               {!event.registerLink && (
                 <Text style={styles.noLinkNote}>
                   * Registering adds you to the event directly in the app.
@@ -828,190 +822,483 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  centered: { flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
-  errorText: { color: 'white', fontSize: 18, marginBottom: 12 },
-  backLink: { color: '#4f46e5', fontSize: 15 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: Colors.light.text,
+    fontSize: 16,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 12,
+  },
+  backLink: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontFamily: 'Sora_600SemiBold',
+  },
 
   floatingHeader: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingTop: 52, paddingHorizontal: 20, paddingBottom: 12,
-    backgroundColor: '#121212',
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#2a2a2a',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 52,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
-  floatingHeaderBtn: { paddingVertical: 4, paddingHorizontal: 2 },
-  floatingHeaderBtnText: { color: '#4f46e5', fontSize: 15, fontWeight: '600' },
+  floatingHeaderBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  floatingHeaderBtnText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
 
   heroContainer: {
-    height: HERO_HEIGHT, width: SCREEN_WIDTH, overflow: 'hidden', position: 'relative',
+    height: HERO_HEIGHT,
+    width: SCREEN_WIDTH,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  posterWrapper: { position: 'absolute', top: -40, left: 0, right: 0, bottom: -40 },
-  posterImage: { width: '100%', height: '100%' },
+  posterWrapper: {
+    position: 'absolute',
+    top: -40,
+    left: 0,
+    right: 0,
+    bottom: -40,
+  },
+  posterImage: {
+    width: '100%',
+    height: '100%',
+  },
   posterPlaceholder: {
-    flex: 1, backgroundColor: '#1e1b4b', justifyContent: 'center', alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  posterPlaceholderText: { fontSize: 64 },
+  posterPlaceholderText: {
+    fontSize: 64,
+  },
   heroGradient: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: HERO_HEIGHT * 0.75,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: HERO_HEIGHT * 0.75,
   },
   heroButtons: {
-    position: 'absolute', top: 52, left: 16, right: 16,
-    flexDirection: 'row', justifyContent: 'space-between', zIndex: 10,
+    position: 'absolute',
+    top: 52,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
   },
   heroPillBtn: {
-    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  heroPillBtnText: { color: 'white', fontSize: 14, fontWeight: '600' },
-  heroTextBlock: { position: 'absolute', bottom: 20, left: 20, right: 20, zIndex: 10 },
+  heroPillBtnText: {
+    color: 'white',
+    fontSize: 12,
+    fontFamily: 'Sora_700Bold',
+  },
+  heroTextBlock: {
+    position: 'absolute',
+    bottom: 24,
+    left: 20,
+    right: 20,
+    zIndex: 10,
+  },
   badge: {
-    backgroundColor: 'rgba(79,70,229,0.85)', alignSelf: 'flex-start',
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, marginBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginBottom: 10,
   },
-  badgeText: { color: '#e0e7ff', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  badgeText: {
+    color: Colors.light.primary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    letterSpacing: 0.5,
+  },
   title: {
-    color: 'white', fontSize: 26, fontWeight: 'bold', lineHeight: 34,
-    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
+    color: 'white',
+    fontSize: 24,
+    fontFamily: 'Sora_700Bold',
+    lineHeight: 32,
+    textShadowColor: 'rgba(15, 23, 42, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
 
-  content: { paddingHorizontal: 20, paddingTop: 20 },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
 
   deadlineBanner: {
-    backgroundColor: '#2a1500',
+    backgroundColor: 'rgba(249, 115, 22, 0.08)',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: '#F97316',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
   },
-  deadlineBannerText: { color: '#f97316', fontSize: 13, fontWeight: '600', lineHeight: 20 },
+  deadlineBannerText: {
+    color: '#D97706',
+    fontSize: 12,
+    fontFamily: 'Sora_600SemiBold',
+    lineHeight: 18,
+  },
 
   infoCard: {
-    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 20, marginBottom: 20, gap: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  infoIcon: { fontSize: 22 },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  infoIcon: {
+    fontSize: 22,
+  },
   infoLabel: {
-    color: '#888', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6,
+    color: Colors.light.textSecondary,
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
-  infoValue: { color: 'white', fontSize: 15, fontWeight: '500', marginTop: 2 },
+  infoValue: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_600SemiBold',
+    marginTop: 2,
+  },
 
   countCard: {
-    backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20, alignItems: 'center',
-    marginBottom: 24, borderWidth: 1, borderColor: '#4f46e5',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
   },
-  countNumber: { color: '#818cf8', fontSize: 48, fontWeight: 'bold' },
-  countLabel: { color: '#a5b4fc', fontSize: 15, marginTop: 4 },
+  countNumber: {
+    color: Colors.light.primary,
+    fontSize: 48,
+    fontFamily: 'Sora_700Bold',
+  },
+  countLabel: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontFamily: 'Sora_600SemiBold',
+    marginTop: 4,
+  },
   seatBadge: {
-    marginTop: 10, backgroundColor: '#052e16', borderWidth: 1, borderColor: '#22c55e',
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    marginTop: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1,
+    borderColor: Colors.light.success,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  seatBadgeFull: { backgroundColor: '#2a0a0a', borderColor: '#ef4444' },
-  seatBadgeText: { color: '#22c55e', fontWeight: '700', fontSize: 13 },
-  seatBadgeTextFull: { color: '#ef4444' },
+  seatBadgeFull: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderColor: Colors.light.error,
+  },
+  seatBadgeText: {
+    color: Colors.light.success,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 12,
+  },
+  seatBadgeTextFull: {
+    color: Colors.light.error,
+  },
 
   organizerSection: {
-    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 16, marginBottom: 24,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
-  studentsToggle: { flexDirection: 'row', alignItems: 'center' },
-  studentsToggleText: { color: '#4f46e5', fontWeight: '700', fontSize: 15 },
-  studentsList: { marginTop: 14, gap: 10 },
-  noStudents: { color: '#666', fontSize: 14, textAlign: 'center', marginTop: 8 },
-  studentCard: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14 },
-  studentRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  studentsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  studentsToggleText: {
+    color: Colors.light.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+  },
+  studentsList: {
+    marginTop: 14,
+    gap: 10,
+  },
+  noStudents: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Sora_400Regular',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  studentCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  studentRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
   studentAvatar: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: '#22c55e',
-    justifyContent: 'center', alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.light.success,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  avatarText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  studentName: { color: 'white', fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
-  studentDetail: { color: '#aaa', fontSize: 13, marginBottom: 2 },
-  studentDetailMissing: { color: '#555', fontSize: 13, marginBottom: 2, fontStyle: 'italic' },
+  avatarText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  studentName: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 4,
+  },
+  studentDetail: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+    fontFamily: 'Sora_400Regular',
+    marginBottom: 2,
+  },
+  studentDetailMissing: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+    fontFamily: 'Sora_400Regular',
+    marginBottom: 2,
+    fontStyle: 'italic',
+  },
 
-  sectionHeading: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-  description: { color: '#cccccc', fontSize: 15, lineHeight: 24, marginBottom: 28 },
+  sectionHeading: {
+    color: Colors.light.text,
+    fontSize: 16,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 10,
+  },
+  description: {
+    color: '#475569',
+    fontSize: 14,
+    fontFamily: 'Sora_400Regular',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
 
   // ── CTA ──
-  ctaContainer: { gap: 12, marginBottom: 10 },
+  ctaContainer: {
+    gap: 12,
+    marginBottom: 10,
+  },
 
-  btnInner: { alignItems: 'center', gap: 3 },
+  btnInner: {
+    alignItems: 'center',
+    gap: 2,
+  },
 
   interestButton: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#4f46e5',
+    borderColor: Colors.light.primary,
     padding: 16,
     borderRadius: 14,
     alignItems: 'center',
   },
   interestButtonUrgent: {
-    backgroundColor: '#2a1500',
-    borderColor: '#f97316',
+    backgroundColor: 'rgba(249, 115, 22, 0.05)',
+    borderColor: '#F97316',
   },
-  interestButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
-  interestButtonSub: { color: '#888', fontSize: 11, marginTop: 2 },
+  interestButtonText: {
+    color: Colors.light.primary,
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  interestButtonSub: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+    fontFamily: 'Sora_400Regular',
+  },
 
   interestedBadge: {
-    backgroundColor: '#1e1b4b', borderWidth: 1.5, borderColor: '#4f46e5',
-    padding: 14, borderRadius: 14, alignItems: 'center',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(79, 70, 229, 0.3)',
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center',
   },
-  interestedBadgeText: { color: '#818cf8', fontSize: 15, fontWeight: 'bold' },
+  interestedBadgeText: {
+    color: Colors.light.primary,
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
 
   registerButton: {
-    backgroundColor: '#22c55e', padding: 16, borderRadius: 14, alignItems: 'center',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  registerButtonUrgent: { backgroundColor: '#f97316' },
-  registerButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  registerButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 2 },
+  registerButtonGradient: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  registerButtonUrgent: {
+    backgroundColor: '#F97316',
+  },
+  registerButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  registerButtonSub: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    marginTop: 2,
+    fontFamily: 'Sora_400Regular',
+  },
 
   registeredBadge: {
-    backgroundColor: '#052e16', borderWidth: 1.5, borderColor: '#22c55e',
-    padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    padding: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  registeredBadgeText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold' },
+  registeredBadgeText: {
+    color: '#10B981',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
 
   unregisterButton: {
-    borderWidth: 1, borderColor: '#ef4444', padding: 12,
-    borderRadius: 12, alignItems: 'center', marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.error,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  unregisterButtonText: { color: '#ef4444', fontSize: 14, fontWeight: '600' },
+  unregisterButtonText: {
+    color: Colors.light.error,
+    fontSize: 14,
+    fontFamily: 'Sora_600SemiBold',
+  },
 
   fullBadge: {
-    backgroundColor: '#2a0a0a', borderWidth: 1.5, borderColor: '#ef4444',
-    padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1.5,
+    borderColor: Colors.light.error,
+    padding: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  fullBadgeText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
-  noLinkNote: { color: '#555', fontSize: 12, textAlign: 'center' },
+  fullBadgeText: {
+    color: Colors.light.error,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  noLinkNote: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_400Regular',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   closeRegistrationBtn: {
-  marginTop: 12,
-  marginBottom: 10,
-  backgroundColor: '#78350f',
-  borderWidth: 1,
-  borderColor: '#f59e0b',
-  borderRadius: 10,
-  paddingVertical: 12,
-  alignItems: 'center',
-},
-
-closeRegistrationBtnText: {
-  color: '#fbbf24',
-  fontWeight: '700',
-  fontSize: 14,
-},
+    marginTop: 12,
+    marginBottom: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  closeRegistrationBtnText: {
+    color: '#D97706',
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+  },
 
   deleteEventBtn: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: '#3a1c1c',
+    borderTopColor: '#F1F5F9',
     alignItems: 'center',
     paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#2a0a0a',
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: Colors.light.error,
   },
-  deleteEventBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
+  deleteEventBtnText: {
+    color: Colors.light.error,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+  },
 });

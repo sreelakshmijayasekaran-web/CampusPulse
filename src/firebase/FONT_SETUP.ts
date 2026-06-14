@@ -11,6 +11,7 @@
 //   Copy the snippet below into your _layout.tsx:
 
 
+/*
 import { useFonts } from 'expo-font';
 import {
   Sora_300Light,
@@ -44,6 +45,7 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }} />
   );
 }
+*/
 
 
 // Step 3 — Drop login.tsx and signup.tsx into your app/ folder

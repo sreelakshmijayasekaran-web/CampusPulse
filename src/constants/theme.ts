@@ -9,18 +9,41 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#16213E',
+    background: '#FFF8F0',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#FFE7D4',
+    textSecondary: '#6B7280',
+    primary: '#2563EB',
+    border: '#F3D7C8',
+    shadowColor: '#F97316',
+    success: '#16A34A',
+    error: '#EF4444',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFF8F0',
+    background: '#111827',
+    backgroundElement: '#1F2937',
+    backgroundSelected: '#374151',
+    textSecondary: '#D1D5DB',
+    primary: '#38BDF8',
+    border: '#374151',
+    shadowColor: '#000000',
+    success: '#22C55E',
+    error: '#F87171',
+  },
+} as const;
+
+export const Gradients = {
+  light: {
+    primary: ['#2563EB', '#F97316'] as [string, string],
+    sunrise: ['#FFF7ED', '#DBEAFE'] as [string, string],
+    campus: ['#2563EB', '#06B6D4', '#F97316'] as [string, string, string],
+  },
+  dark: {
+    primary: ['#38BDF8', '#F97316'] as [string, string],
+    sunrise: ['#111827', '#1E3A8A'] as [string, string],
+    campus: ['#38BDF8', '#22C55E', '#F97316'] as [string, string, string],
   },
 } as const;
 
