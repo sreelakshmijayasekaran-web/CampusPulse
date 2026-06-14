@@ -1,5 +1,6 @@
 // app/profile.tsx
-// Updated to show history sections for students and organizers.
+// Restyled to match the CampusPulse home screen design system.
+// - Gradient hero header with avatar, name, role badge
 // - All users: "Events Participated" section
 // - Organizers: additional "My Posted Events" section
 // - All users: "Send Feedback" button
@@ -15,8 +16,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { Colors, Gradients } from '../constants/theme';
 import { Event, fetchMyEvents, fetchMyRegisteredEvents } from '../firebase/eventService';
 import { auth, db } from '../firebase/firebaseConfig';
+
+const ROLE_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; bg: string; text: string }> = {
+  admin: { label: 'Admin', icon: 'shield-checkmark-outline', bg: '#FFE4E6', text: '#BE123C' },
+  organizer: { label: 'Organizer', icon: 'briefcase-outline', bg: '#DBEAFE', text: '#1D4ED8' },
+  student: { label: 'Student', icon: 'school-outline', bg: '#DCFCE7', text: '#15803D' },
+};
 
 export default function Profile() {
   const [loading, setLoading] = useState(true);
@@ -60,7 +72,7 @@ export default function Profile() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
       </View>
     );
   }
@@ -68,7 +80,7 @@ export default function Profile() {
   if (!userData) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.text}>No user data found</Text>
+        <Text style={styles.emptyText}>No user data found</Text>
       </View>
     );
   }
@@ -76,210 +88,427 @@ export default function Profile() {
   const isOrganizer = userData.role === 'organizer';
   const approvedPosted = postedEvents.filter((e) => e.status === 'approved').length;
   const pendingPosted = postedEvents.filter((e) => e.status === 'pending').length;
+  const roleMeta = ROLE_META[userData.role] ?? ROLE_META.student;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      {/* Avatar */}
-      <View style={styles.avatarRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {userData.name?.[0]?.toUpperCase() ?? '?'}
-          </Text>
-        </View>
-        <View>
-          <Text style={styles.userName}>{userData.name}</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>
-              {userData.role === 'admin' ? '🛡 Admin' : isOrganizer ? '🗂 Organizer' : '🎓 Student'}
+      {/* Hero header */}
+      <LinearGradient colors={Gradients.light.sunrise} style={styles.heroPanel}>
+        <View style={styles.avatarRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {userData.name?.[0]?.toUpperCase() ?? '?'}
             </Text>
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eyebrow}>Your profile</Text>
+            <Text style={styles.userName}>{userData.name}</Text>
+            <View style={[styles.roleBadge, { backgroundColor: roleMeta.bg }]}>
+              <Ionicons name={roleMeta.icon} size={13} color={roleMeta.text} />
+              <Text style={[styles.roleBadgeText, { color: roleMeta.text }]}>{roleMeta.label}</Text>
+            </View>
+          </View>
         </View>
-      </View>
+      </LinearGradient>
 
-      {/* Profile Card */}
+      {/* Profile details card */}
       <View style={styles.card}>
-        <ProfileRow label="Email" value={userData.email} />
-        <ProfileRow label="Phone" value={userData.phone || 'Not added'} />
-        <ProfileRow label="Department" value={userData.department || 'Not added'} />
-        <ProfileRow label="Year" value={userData.year || 'Not added'} />
-        <ProfileRow label="College" value={userData.college || 'Not added'} />
+        <View style={styles.cardHeader}>
+          <View style={[styles.sectionIcon, { backgroundColor: '#DBEAFE' }]}>
+            <Ionicons name="person-outline" size={18} color="#1D4ED8" />
+          </View>
+          <Text style={styles.cardTitle}>Account details</Text>
+        </View>
+        <ProfileRow icon="mail-outline" label="Email" value={userData.email} />
+        <ProfileRow icon="call-outline" label="Phone" value={userData.phone || 'Not added'} />
+        <ProfileRow icon="business-outline" label="Department" value={userData.department || 'Not added'} />
+        <ProfileRow icon="ribbon-outline" label="Year" value={userData.year || 'Not added'} />
+        <ProfileRow icon="school-outline" label="College" value={userData.college || 'Not added'} last />
       </View>
 
       {/* ── HISTORY SECTIONS ── */}
 
       {/* Organizer: My Posted Events */}
       {isOrganizer && (
-        <TouchableOpacity
-          style={styles.historySection}
+        <HistoryCard
+          icon="albums-outline"
+          iconBg="#DBEAFE"
+          iconColor="#1D4ED8"
+          title="My Posted Events"
+          subtitle={
+            `${postedEvents.length} event${postedEvents.length !== 1 ? 's' : ''} submitted` +
+            (approvedPosted > 0 ? ` · ${approvedPosted} approved` : '') +
+            (pendingPosted > 0 ? ` · ${pendingPosted} pending` : '')
+          }
           onPress={() => router.push('/my-events')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.historySectionLeft}>
-            <View style={[styles.historyIcon, { backgroundColor: '#1e1b4b' }]}>
-              <Text style={styles.historyIconEmoji}>📝</Text>
-            </View>
-            <View>
-              <Text style={styles.historySectionTitle}>My Posted Events</Text>
-              <Text style={styles.historySectionSub}>
-                {postedEvents.length} event{postedEvents.length !== 1 ? 's' : ''} submitted
-                {approvedPosted > 0 ? ` · ${approvedPosted} approved` : ''}
-                {pendingPosted > 0 ? ` · ${pendingPosted} pending` : ''}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.historySectionArrow}>›</Text>
-        </TouchableOpacity>
+        />
       )}
 
       {/* All users: Events Participated */}
-      <TouchableOpacity
-        style={styles.historySection}
+      <HistoryCard
+        icon="ticket-outline"
+        iconBg="#DCFCE7"
+        iconColor="#15803D"
+        title="Events Participated"
+        subtitle={
+          registeredEvents.length > 0
+            ? `${registeredEvents.length} event${registeredEvents.length !== 1 ? 's' : ''} registered`
+            : 'No events registered yet'
+        }
         onPress={() => router.push('/event-history')}
-        activeOpacity={0.85}
-      >
-        <View style={styles.historySectionLeft}>
-          <View style={[styles.historyIcon, { backgroundColor: '#052e16' }]}>
-            <Text style={styles.historyIconEmoji}>🎟</Text>
-          </View>
-          <View>
-            <Text style={styles.historySectionTitle}>Events Participated</Text>
-            <Text style={styles.historySectionSub}>
-              {registeredEvents.length > 0
-                ? `${registeredEvents.length} event${registeredEvents.length !== 1 ? 's' : ''} registered`
-                : 'No events registered yet'
-              }
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.historySectionArrow}>›</Text>
-      </TouchableOpacity>
+      />
 
       {/* ── ACTIONS ── */}
 
-      <View style={styles.divider} />
+      <Text style={styles.groupLabel}>More</Text>
 
-      {/* Send Feedback */}
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() => router.push('/feedback')}
-      >
-        <Text style={styles.actionButtonIcon}>💬</Text>
-        <Text style={styles.actionButtonText}>Send Feedback</Text>
-        <Text style={styles.actionButtonArrow}>›</Text>
-      </TouchableOpacity>
+      <View style={styles.actionGroup}>
+        <ActionRow
+          icon="chatbubble-ellipses-outline"
+          iconBg="#FEF3C7"
+          iconColor="#B45309"
+          label="Send Feedback"
+          onPress={() => router.push('/feedback')}
+        />
+        <ActionRow
+          icon="settings-outline"
+          iconBg="#F1F5F9"
+          iconColor="#475569"
+          label="Settings"
+          onPress={() => router.push('/settings')}
+        />
+        <ActionRow
+          icon="help-circle-outline"
+          iconBg="#F3E8FF"
+          iconColor="#7E22CE"
+          label="Help"
+          onPress={() => router.push('/help')}
+        />
+        {userData.role === 'admin' && (
+          <ActionRow
+            icon="shield-checkmark-outline"
+            iconBg="#FFE4E6"
+            iconColor="#BE123C"
+            label="Admin Panel"
+            onPress={() => router.push('/admin')}
+          />
+        )}
+        <ActionRow
+          icon="log-out-outline"
+          iconBg="#FEE2E2"
+          iconColor={Colors.light.error}
+          label="Log Out"
+          labelColor={Colors.light.error}
+          onPress={handleLogout}
+          last
+        />
+      </View>
 
-      {/* Settings */}
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() => router.push('/settings')}
-      >
-        <Text style={styles.actionButtonIcon}>⚙️</Text>
-        <Text style={styles.actionButtonText}>Settings</Text>
-        <Text style={styles.actionButtonArrow}>›</Text>
-      </TouchableOpacity>
-
-      {/* Help */}
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() => router.push('/help')}
-      >
-        <Text style={styles.actionButtonIcon}>❓</Text>
-        <Text style={styles.actionButtonText}>Help</Text>
-        <Text style={styles.actionButtonArrow}>›</Text>
-      </TouchableOpacity>
-
-      {/* Admin Panel — only for admins */}
-      {userData.role === 'admin' && (
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => router.push('/admin')}
-        >
-          <Text style={styles.actionButtonIcon}>🛡</Text>
-          <Text style={styles.actionButtonText}>Admin Panel</Text>
-          <Text style={styles.actionButtonArrow}>›</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Log Out */}
-      <TouchableOpacity
-        style={[styles.actionButton, styles.logoutButton]}
-        onPress={handleLogout}
-      >
-        <Text style={styles.actionButtonIcon}>🚪</Text>
-        <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Log Out</Text>
-        <Text style={styles.actionButtonArrow}>›</Text>
-      </TouchableOpacity>
-
-      <View style={{ height: 40 }} />
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
-function ProfileRow({ label, value }: { label: string; value: string }) {
+function ProfileRow({
+  icon,
+  label,
+  value,
+  last,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
   return (
-    <View style={styles.profileRow}>
-      <Text style={styles.profileLabel}>{label}</Text>
-      <Text style={styles.profileValue}>{value}</Text>
+    <View style={[styles.profileRow, last && styles.noBorder]}>
+      <View style={styles.profileLabelRow}>
+        <Ionicons name={icon} size={15} color={Colors.light.textSecondary} />
+        <Text style={styles.profileLabel}>{label}</Text>
+      </View>
+      <Text style={styles.profileValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  content: { padding: 24, paddingTop: 60 },
-  centered: { flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
-  text: { color: 'white' },
+function HistoryCard({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.historyCard} onPress={onPress} activeOpacity={0.85}>
+      <View style={styles.historyLeft}>
+        <View style={[styles.historyIcon, { backgroundColor: iconBg }]}>
+          <Ionicons name={icon} size={20} color={iconColor} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.historyTitle}>{title}</Text>
+          <Text style={styles.historySubtitle} numberOfLines={1}>{subtitle}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+    </TouchableOpacity>
+  );
+}
 
+function ActionRow({
+  icon,
+  iconBg,
+  iconColor,
+  label,
+  labelColor,
+  onPress,
+  last,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  label: string;
+  labelColor?: string;
+  onPress: () => void;
+  last?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.actionRow, last && styles.noBorder]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.actionIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <Text style={[styles.actionLabel, labelColor && { color: labelColor }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  content: {
+    paddingTop: 54,
+    paddingHorizontal: 18,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.light.background,
+  },
+  emptyText: {
+    color: Colors.light.text,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 14,
+  },
+
+  // ── Hero ──
+  heroPanel: {
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 5,
+  },
   avatarRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   avatar: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#4f46e5', justifyContent: 'center', alignItems: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  avatarText: { color: 'white', fontSize: 28, fontWeight: 'bold' },
-  userName: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 6 },
+  avatarText: {
+    color: 'white',
+    fontSize: 26,
+    fontFamily: 'Sora_700Bold',
+  },
+  eyebrow: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  userName: {
+    color: Colors.light.text,
+    fontSize: 20,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 8,
+  },
   roleBadge: {
-    backgroundColor: '#1e1b4b', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-    alignSelf: 'flex-start', borderWidth: 1, borderColor: '#4f46e5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  roleBadgeText: { color: '#818cf8', fontSize: 12, fontWeight: '700' },
+  roleBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+  },
 
-  card: { backgroundColor: '#1e1e1e', borderRadius: 16, padding: 16, marginBottom: 20 },
+  // ── Account details card ──
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    color: Colors.light.text,
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  sectionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   profileRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#2a2a2a',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 12,
   },
-  profileLabel: { color: '#888', fontSize: 14 },
-  profileValue: { color: 'white', fontSize: 14, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  noBorder: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
+  },
+  profileLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileLabel: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Sora_500Medium',
+  },
+  profileValue: {
+    color: Colors.light.text,
+    fontSize: 13,
+    fontFamily: 'Sora_600SemiBold',
+    maxWidth: '55%',
+    textAlign: 'right',
+  },
 
-  // ── History section cards ──
-  historySection: {
-    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 12, borderWidth: 1, borderColor: '#2a2a2a',
+  // ── History cards ──
+  historyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  historySectionLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    flex: 1,
+  },
   historyIcon: {
-    width: 46, height: 46, borderRadius: 12,
-    justifyContent: 'center', alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  historyIconEmoji: { fontSize: 22 },
-  historySectionTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 2 },
-  historySectionSub: { color: '#888', fontSize: 12 },
-  historySectionArrow: { color: '#444', fontSize: 24, paddingLeft: 8 },
+  historyTitle: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 2,
+  },
+  historySubtitle: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_400Regular',
+  },
 
-  divider: { height: 1, backgroundColor: '#2a2a2a', marginVertical: 16 },
-
-  // ── Action buttons ──
-  actionButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1e1e1e', padding: 16, borderRadius: 14,
+  // ── Action group ──
+  groupLabel: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
     marginBottom: 10,
+    marginTop: 4,
+    marginLeft: 4,
   },
-  logoutButton: { borderWidth: 1, borderColor: '#3a1c1c' },
-  actionButtonIcon: { fontSize: 20, width: 28 },
-  actionButtonText: { flex: 1, color: 'white', fontSize: 16, fontWeight: '500' },
-  actionButtonArrow: { color: '#444', fontSize: 20 },
+  actionGroup: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    paddingHorizontal: 14,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  actionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionLabel: {
+    flex: 1,
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_600SemiBold',
+  },
 });

@@ -1,6 +1,8 @@
 // app/event-history.tsx
 // Shows all events the current user has registered for — "participated history"
 
+import { useFocusEffect } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,9 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import { fetchMyRegisteredEvents, Event } from '../firebase/eventService';
+
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { Colors, Gradients } from '../constants/theme';
+import { Event, fetchMyRegisteredEvents } from '../firebase/eventService';
 import { auth } from '../firebase/firebaseConfig';
 
 type GroupedEvents = {
@@ -42,10 +47,19 @@ function extractMonthLabel(timeStr: string): string {
   return 'Other';
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  approved: '#22c55e',
-  pending: '#f59e0b',
-  rejected: '#ef4444',
+const CATEGORY_STYLES: Record<string, { bg: string; text: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  Hackathon: { bg: '#E0F2FE', text: '#0369A1', icon: 'code-slash-outline' },
+  Workshop: { bg: '#DCFCE7', text: '#15803D', icon: 'construct-outline' },
+  Seminar: { bg: '#FEF3C7', text: '#B45309', icon: 'mic-outline' },
+  Cultural: { bg: '#FFE4E6', text: '#BE123C', icon: 'musical-notes-outline' },
+  Sports: { bg: '#F3E8FF', text: '#7E22CE', icon: 'football-outline' },
+  Other: { bg: '#F1F5F9', text: '#475569', icon: 'apps-outline' },
+};
+
+const STATUS_META: Record<string, { color: string; label: string }> = {
+  approved: { color: '#22C55E', label: 'Approved' },
+  pending: { color: '#F59E0B', label: 'Pending' },
+  rejected: { color: '#EF4444', label: 'Rejected' },
 };
 
 export default function EventHistory() {
@@ -75,7 +89,7 @@ export default function EventHistory() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
       </View>
     );
   }
@@ -83,25 +97,37 @@ export default function EventHistory() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.backBtn}>← Back</Text>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <Ionicons name="chevron-back" size={20} color={Colors.light.primary} />
+        <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
 
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>Events Participated</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{events.length}</Text>
+      {/* Hero header */}
+      <LinearGradient colors={Gradients.light.sunrise} style={styles.heroPanel}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroIcon}>
+            <Ionicons name="ticket-outline" size={24} color="white" />
+          </View>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{events.length}</Text>
+          </View>
         </View>
-      </View>
-      <Text style={styles.subheading}>Your full event registration history</Text>
+        <Text style={styles.heroTitle}>Events Participated</Text>
+        <Text style={styles.heroSub}>Your full event registration history</Text>
+      </LinearGradient>
 
       {events.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyEmoji}>📭</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="file-tray-outline" size={30} color={Colors.light.primary} />
+          </View>
           <Text style={styles.emptyTitle}>No events yet</Text>
           <Text style={styles.emptyText}>Events you register for will appear here.</Text>
-          <TouchableOpacity style={styles.browseButton} onPress={() => router.push('/')}>
-            <Text style={styles.browseButtonText}>Browse Events →</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/')}>
+            <LinearGradient colors={Gradients.light.primary} style={styles.browseButton}>
+              <Text style={styles.browseButtonText}>Browse Events</Text>
+              <Ionicons name="arrow-forward" size={16} color="white" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       ) : (
@@ -113,130 +139,311 @@ export default function EventHistory() {
               <View style={styles.monthLine} />
             </View>
 
-            {group.events.map((event) => (
-              <TouchableOpacity
-                key={event.id}
-                style={styles.card}
-                onPress={() => router.push(`/event-details?id=${event.id}`)}
-                activeOpacity={0.8}
-              >
-                {event.posterUrl ? (
-                  <Image source={{ uri: event.posterUrl }} style={styles.thumb} resizeMode="cover" />
-                ) : (
-                  <View style={styles.thumbPlaceholder}>
-                    <Text style={styles.thumbEmoji}>🎓</Text>
-                  </View>
-                )}
+            {group.events.map((event) => {
+              const category = event.category || 'Other';
+              const palette = CATEGORY_STYLES[category] ?? CATEGORY_STYLES.Other;
+              const status = STATUS_META[event.status] ?? { color: '#94A3B8', label: event.status };
 
-                <View style={styles.cardBody}>
-                  <View style={styles.cardTopRow}>
-                    <View style={[styles.categoryPill, { backgroundColor: getCategoryColor(event.category) + '22' }]}>
-                      <Text style={[styles.categoryPillText, { color: getCategoryColor(event.category) }]}>
-                        {event.category}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[event.status] ?? '#888' }]} />
-                  </View>
-                  <Text style={styles.cardTitle} numberOfLines={2}>{event.title}</Text>
-                  <Text style={styles.cardVenue} numberOfLines={1}>📍 {event.venue}</Text>
-                  <Text style={styles.cardTime}>🕒 {event.time}</Text>
-                  {event.deadline && (
-                    <Text style={styles.cardDeadline}>⏰ Deadline: {event.deadline}</Text>
+              return (
+                <TouchableOpacity
+                  key={event.id}
+                  style={styles.card}
+                  onPress={() => router.push(`/event-details?id=${event.id}`)}
+                  activeOpacity={0.85}
+                >
+                  {event.posterUrl ? (
+                    <Image source={{ uri: event.posterUrl }} style={styles.thumb} resizeMode="cover" />
+                  ) : (
+                    <LinearGradient colors={[palette.bg, '#FFFFFF']} style={styles.thumbPlaceholder}>
+                      <Ionicons name={palette.icon} size={26} color={palette.text} />
+                    </LinearGradient>
                   )}
-                </View>
 
-                <Text style={styles.arrow}>›</Text>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTopRow}>
+                      <View style={[styles.categoryPill, { backgroundColor: palette.bg }]}>
+                        <Text style={[styles.categoryPillText, { color: palette.text }]}>
+                          {category}
+                        </Text>
+                      </View>
+                      <View style={styles.statusRow}>
+                        <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                        <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.cardTitle} numberOfLines={2}>{event.title}</Text>
+                    <MetaRow icon="location-outline" text={event.venue} />
+                    <MetaRow icon="time-outline" text={event.time} />
+                    {event.deadline && (
+                      <View style={styles.deadlineRow}>
+                        <Ionicons name="alarm-outline" size={12} color="#B45309" />
+                        <Text style={styles.cardDeadline}>Deadline: {event.deadline}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         ))
       )}
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
-function getCategoryColor(category: string): string {
-  const map: Record<string, string> = {
-    Hackathon: '#4f46e5',
-    Workshop: '#0ea5e9',
-    Seminar: '#8b5cf6',
-    Cultural: '#f59e0b',
-    Sports: '#22c55e',
-    Other: '#6b7280',
-  };
-  return map[category] ?? '#6b7280';
+function MetaRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.metaRow}>
+      <Ionicons name={icon} size={12} color={Colors.light.textSecondary} />
+      <Text style={styles.metaText} numberOfLines={1}>{text}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-  centered: { flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
-
-  backBtn: { color: '#4f46e5', fontSize: 16, fontWeight: '600', marginBottom: 20 },
-
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-  heading: { color: 'white', fontSize: 26, fontWeight: 'bold' },
-  countBadge: {
-    backgroundColor: '#4f46e5', borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 4,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
   },
-  countBadgeText: { color: 'white', fontSize: 13, fontWeight: 'bold' },
-  subheading: { color: '#666', fontSize: 13, marginBottom: 28 },
-
-  group: { marginBottom: 8 },
-
-  monthRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, marginTop: 8,
+  content: {
+    paddingTop: 54,
+    paddingHorizontal: 18,
+    paddingBottom: 24,
   },
-  monthLine: { flex: 1, height: 1, backgroundColor: '#2a2a2a' },
-  monthLabel: {
-    color: '#888', fontSize: 11, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 1.2,
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.light.background,
   },
 
-  card: {
-    backgroundColor: '#1e1e1e',
-    borderRadius: 16,
+  // ── Back button ──
+  backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+  },
+  backText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+
+  // ── Hero ──
+  heroPanel: {
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 5,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  heroIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countBadge: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 36,
+    alignItems: 'center',
+  },
+  countBadgeText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  heroTitle: {
+    color: Colors.light.text,
+    fontSize: 22,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 4,
+  },
+  heroSub: {
+    color: '#475569',
+    fontSize: 13,
+    fontFamily: 'Sora_400Regular',
+  },
+
+  // ── Month group ──
+  group: { marginBottom: 8 },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  monthLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.light.border,
+  },
+  monthLabel: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // ── Card ──
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: Colors.light.border,
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-
-  thumb: { width: 80, height: 80 },
+  thumb: {
+    width: 84,
+    height: 96,
+  },
   thumbPlaceholder: {
-    width: 80, height: 80,
-    backgroundColor: '#1e1b4b',
-    justifyContent: 'center', alignItems: 'center',
+    width: 84,
+    height: 96,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  thumbEmoji: { fontSize: 28 },
 
-  cardBody: { flex: 1, padding: 12, gap: 3 },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  cardBody: {
+    flex: 1,
+    padding: 12,
+    gap: 4,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   categoryPill: {
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
-  categoryPillText: { fontSize: 10, fontWeight: '700' },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  categoryPillText: {
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  statusLabel: {
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
 
-  cardTitle: { color: 'white', fontSize: 14, fontWeight: 'bold', lineHeight: 20 },
-  cardVenue: { color: '#888', fontSize: 12 },
-  cardTime: { color: '#888', fontSize: 12 },
-  cardDeadline: { color: '#f59e0b', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  cardTitle: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+    lineHeight: 19,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaText: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_400Regular',
+    flex: 1,
+  },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  cardDeadline: {
+    color: '#B45309',
+    fontSize: 11,
+    fontFamily: 'Sora_600SemiBold',
+  },
 
-  arrow: { color: '#444', fontSize: 24, paddingHorizontal: 12 },
-
-  emptyBox: { alignItems: 'center', marginTop: 80, gap: 10 },
-  emptyEmoji: { fontSize: 52 },
-  emptyTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
+  // ── Empty state ──
+  emptyBox: {
+    alignItems: 'center',
+    marginTop: 36,
+    paddingHorizontal: 20,
+    paddingVertical: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  emptyIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: Colors.light.text,
+    fontSize: 17,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+    fontFamily: 'Sora_400Regular',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   browseButton: {
-    backgroundColor: '#4f46e5', paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 12, marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
-  browseButtonText: { color: 'white', fontWeight: '700', fontSize: 15 },
+  browseButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
 });
