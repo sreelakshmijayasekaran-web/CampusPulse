@@ -1,5 +1,5 @@
 // app/my-events.tsx
-// Shows the events an organizer has posted — Chrome history-style layout.
+// Shows the events an organizer has posted — light theme matching index.tsx
 
 import { useCallback, useState } from 'react';
 import {
@@ -12,9 +12,12 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchMyEvents, Event } from '../firebase/eventService';
 import { auth } from '../firebase/firebaseConfig';
+import { Colors, Gradients } from '../constants/theme';
 
 type GroupedEvents = { label: string; events: Event[] };
 
@@ -39,23 +42,23 @@ function groupByMonth(events: Event[]): GroupedEvents[] {
   return Object.entries(map).map(([label, evts]) => ({ label, events: evts }));
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  approved: { label: '✅ Approved', color: '#22c55e', bg: '#052e16' },
-  pending:  { label: '⏳ Pending',  color: '#f59e0b', bg: '#2a1f00' },
-  rejected: { label: '❌ Rejected', color: '#ef4444', bg: '#2a0a0a' },
+const STATUS_CONFIG: Record<string, {
+  label: string; color: string; bg: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = {
+  approved: { label: 'Approved', color: '#16A34A', bg: '#DCFCE7', icon: 'checkmark-circle-outline' },
+  pending:  { label: 'Pending',  color: '#B45309', bg: '#FEF3C7', icon: 'time-outline' },
+  rejected: { label: 'Rejected', color: '#DC2626', bg: '#FEE2E2', icon: 'close-circle-outline' },
 };
 
-function getCategoryColor(category: string): string {
-  const map: Record<string, string> = {
-    Hackathon: '#4f46e5',
-    Workshop: '#0ea5e9',
-    Seminar: '#8b5cf6',
-    Cultural: '#f59e0b',
-    Sports: '#22c55e',
-    Other: '#6b7280',
-  };
-  return map[category] ?? '#6b7280';
-}
+const CATEGORY_META: Record<string, { color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  Hackathon: { color: '#2563EB', bg: '#DBEAFE', icon: 'code-slash-outline' },
+  Workshop:  { color: '#059669', bg: '#D1FAE5', icon: 'construct-outline' },
+  Seminar:   { color: '#7C3AED', bg: '#EDE9FE', icon: 'mic-outline' },
+  Cultural:  { color: '#B45309', bg: '#FEF3C7', icon: 'musical-notes-outline' },
+  Sports:    { color: '#16A34A', bg: '#DCFCE7', icon: 'football-outline' },
+  Other:     { color: '#475569', bg: '#F1F5F9', icon: 'apps-outline' },
+};
 
 export default function MyEvents() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -63,11 +66,9 @@ export default function MyEvents() {
   const [grouped, setGrouped] = useState<GroupedEvents[]>([]);
 
   const approved = events.filter((e) => e.status === 'approved').length;
-  const pending = events.filter((e) => e.status === 'pending').length;
+  const pending  = events.filter((e) => e.status === 'pending').length;
   const rejected = events.filter((e) => e.status === 'rejected').length;
 
-  // useFocusEffect re-runs every time this screen comes into focus
-  // This fixes the "history not updating" bug — previously only ran once on mount
   useFocusEffect(
     useCallback(() => {
       if (!auth.currentUser) { router.replace('/login'); return; }
@@ -85,89 +86,119 @@ export default function MyEvents() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+        <Text style={styles.loadingText}>Loading your events...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* HERO */}
+      <LinearGradient colors={Gradients.light.sunrise} style={styles.heroPanel}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back-outline" size={20} color={Colors.light.primary} />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.backBtn}>← Back</Text>
+        <View style={styles.brandRow}>
+          <View style={styles.brandMark}>
+            <Ionicons name="calendar-outline" size={22} color="white" />
+          </View>
+          <View>
+            <Text style={styles.eyebrow}>Organizer dashboard</Text>
+            <Text style={styles.heading}>My Events</Text>
+          </View>
+        </View>
+
+        <Text style={styles.heroSub}>
+          All events you've submitted — track approvals, registrations, and edits.
+        </Text>
+
+        {/* Stats */}
+        {events.length > 0 && (
+          <View style={styles.statsRow}>
+            <StatChip label="Approved" value={approved} color="#16A34A" />
+            <StatChip label="Pending"  value={pending}  color="#B45309" />
+            <StatChip label="Rejected" value={rejected} color="#DC2626" />
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* Create button */}
+      <TouchableOpacity
+        onPress={() => router.push('/create-event')}
+        activeOpacity={0.85}
+        style={styles.createBtnWrapper}
+      >
+        <LinearGradient colors={Gradients.light.primary} style={styles.createBtn}>
+          <Ionicons name="add-circle-outline" size={18} color="white" />
+          <Text style={styles.createBtnText}>Create New Event</Text>
+        </LinearGradient>
       </TouchableOpacity>
 
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>My Posted Events</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{events.length}</Text>
-        </View>
-      </View>
-      <Text style={styles.subheading}>All events you've submitted as an organizer</Text>
-
-      {/* Stats bar */}
-      {events.length > 0 && (
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderColor: '#22c55e' }]}>
-            <Text style={[styles.statNum, { color: '#22c55e' }]}>{approved}</Text>
-            <Text style={styles.statLabel}>Approved</Text>
-          </View>
-          <View style={[styles.statCard, { borderColor: '#f59e0b' }]}>
-            <Text style={[styles.statNum, { color: '#f59e0b' }]}>{pending}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-          <View style={[styles.statCard, { borderColor: '#ef4444' }]}>
-            <Text style={[styles.statNum, { color: '#ef4444' }]}>{rejected}</Text>
-            <Text style={styles.statLabel}>Rejected</Text>
-          </View>
-        </View>
-      )}
-
+      {/* Empty state */}
       {events.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyEmoji}>📝</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="calendar-outline" size={32} color={Colors.light.primary} />
+          </View>
           <Text style={styles.emptyTitle}>No events posted yet</Text>
-          <Text style={styles.emptyText}>Events you create will appear here.</Text>
-          <TouchableOpacity style={styles.createButton} onPress={() => router.push('/create-event')}>
-            <Text style={styles.createButtonText}>＋ Create Event</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptySubtext}>
+            Events you create will appear here with their status and registrations.
+          </Text>
         </View>
       ) : (
         grouped.map((group) => (
           <View key={group.label} style={styles.group}>
+            {/* Month divider */}
             <View style={styles.monthRow}>
               <View style={styles.monthLine} />
-              <Text style={styles.monthLabel}>{group.label}</Text>
+              <View style={styles.monthLabelWrap}>
+                <Ionicons name="time-outline" size={12} color={Colors.light.textSecondary} />
+                <Text style={styles.monthLabel}>{group.label}</Text>
+              </View>
               <View style={styles.monthLine} />
             </View>
 
             {group.events.map((event) => {
               const statusCfg = STATUS_CONFIG[event.status] ?? STATUS_CONFIG.pending;
-              const regCount = event.registeredUsers?.length ?? 0;
+              const catMeta   = CATEGORY_META[event.category] ?? CATEGORY_META.Other;
+              const regCount  = event.registeredUsers?.length ?? 0;
 
               return (
                 <TouchableOpacity
                   key={event.id}
                   style={styles.card}
                   onPress={() => router.push(`/event-details?id=${event.id}`)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                 >
+                  {/* Thumbnail */}
                   {event.posterUrl ? (
                     <Image source={{ uri: event.posterUrl }} style={styles.thumb} resizeMode="cover" />
                   ) : (
-                    <View style={styles.thumbPlaceholder}>
-                      <Text style={styles.thumbEmoji}>📅</Text>
-                    </View>
+                    <LinearGradient colors={[catMeta.bg, '#FFFFFF']} style={styles.thumbPlaceholder}>
+                      <Ionicons name={catMeta.icon} size={28} color={catMeta.color} />
+                    </LinearGradient>
                   )}
 
+                  {/* Card body */}
                   <View style={styles.cardBody}>
                     <View style={styles.cardTopRow}>
-                      <View style={[styles.categoryPill, { backgroundColor: getCategoryColor(event.category) + '22' }]}>
-                        <Text style={[styles.categoryPillText, { color: getCategoryColor(event.category) }]}>
+                      {/* Category pill */}
+                      <View style={[styles.categoryPill, { backgroundColor: catMeta.bg }]}>
+                        <Ionicons name={catMeta.icon} size={11} color={catMeta.color} />
+                        <Text style={[styles.categoryPillText, { color: catMeta.color }]}>
                           {event.category}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg, borderColor: statusCfg.color }]}>
+                      {/* Status badge */}
+                      <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
+                        <Ionicons name={statusCfg.icon} size={11} color={statusCfg.color} />
                         <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
                           {statusCfg.label}
                         </Text>
@@ -175,25 +206,36 @@ export default function MyEvents() {
                     </View>
 
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.title}</Text>
-                    <Text style={styles.cardVenue} numberOfLines={1}>📍 {event.venue}</Text>
-                    <Text style={styles.cardTime}>🕒 {event.time}</Text>
 
-                    <View style={styles.regRow}>
-                      <Text style={styles.regText}>👥 {regCount} registered</Text>
-                      {event.seatLimit != null && (
-                        <Text style={styles.seatText}>/ {event.seatLimit} seats</Text>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="location-outline" size={12} color={Colors.light.textSecondary} />
+                      <Text style={styles.metaText} numberOfLines={1}>{event.venue}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="time-outline" size={12} color={Colors.light.textSecondary} />
+                      <Text style={styles.metaText} numberOfLines={1}>{event.time}</Text>
+                    </View>
+
+                    <View style={styles.cardFooter}>
+                      <View style={styles.regPill}>
+                        <Ionicons name="people-outline" size={13} color="#16A34A" />
+                        <Text style={styles.regText}>{regCount} registered</Text>
+                        {event.seatLimit != null && (
+                          <Text style={styles.seatText}>/ {event.seatLimit}</Text>
+                        )}
+                      </View>
+                      {event.status !== 'rejected' && (
+                        <TouchableOpacity
+                          style={styles.editBtn}
+                          onPress={() => router.push(`/create-event?id=${event.id}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="pencil-outline" size={14} color={Colors.light.primary} />
+                          <Text style={styles.editBtnText}>Edit</Text>
+                        </TouchableOpacity>
                       )}
                     </View>
                   </View>
-
-                  {event.status !== 'rejected' && (
-                    <TouchableOpacity
-                      style={styles.editBtn}
-                      onPress={() => router.push(`/create-event?id=${event.id}`)}
-                    >
-                      <Text style={styles.editBtnText}>✏️</Text>
-                    </TouchableOpacity>
-                  )}
                 </TouchableOpacity>
               );
             })}
@@ -206,79 +248,321 @@ export default function MyEvents() {
   );
 }
 
+function StatChip({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.statChip}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-  centered: { flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
-
-  backBtn: { color: '#4f46e5', fontSize: 16, fontWeight: '600', marginBottom: 20 },
-
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-  heading: { color: 'white', fontSize: 26, fontWeight: 'bold' },
-  countBadge: {
-    backgroundColor: '#4f46e5', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
   },
-  countBadgeText: { color: 'white', fontSize: 13, fontWeight: 'bold' },
-  subheading: { color: '#666', fontSize: 13, marginBottom: 20 },
-
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  statCard: {
-    flex: 1, backgroundColor: '#1e1e1e', borderRadius: 14,
-    padding: 14, alignItems: 'center', borderWidth: 1,
+  content: {
+    paddingTop: 54,
+    paddingHorizontal: 18,
   },
-  statNum: { fontSize: 24, fontWeight: 'bold' },
-  statLabel: { color: '#888', fontSize: 12, marginTop: 2 },
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13,
+  },
 
-  group: { marginBottom: 8 },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, marginTop: 8 },
-  monthLine: { flex: 1, height: 1, backgroundColor: '#2a2a2a' },
-  monthLabel: { color: '#888', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2 },
+  // HERO
+  heroPanel: {
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 5,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 18,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  backText: {
+    color: Colors.light.primary,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyebrow: {
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+  },
+  heading: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 22,
+    color: Colors.light.text,
+  },
+  heroSub: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'Sora_400Regular',
+    marginBottom: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  statChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderRadius: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontFamily: 'Sora_700Bold',
+  },
+  statLabel: {
+    color: Colors.light.textSecondary,
+    fontSize: 10,
+    fontFamily: 'Sora_600SemiBold',
+    marginTop: 2,
+  },
 
+  // CREATE BUTTON
+  createBtnWrapper: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 18,
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 18,
+  },
+  createBtnText: {
+    color: 'white',
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+  },
+
+  // EMPTY
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    color: Colors.light.text,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 17,
+  },
+  emptySubtext: {
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // MONTH GROUP
+  group: { marginBottom: 6 },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 6,
+  },
+  monthLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.light.border,
+  },
+  monthLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  monthLabel: {
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // EVENT CARD
   card: {
-    backgroundColor: '#1e1e1e', borderRadius: 16,
-    flexDirection: 'row', alignItems: 'center',
-    marginBottom: 10, overflow: 'hidden',
-    borderWidth: 1, borderColor: '#2a2a2a',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    shadowColor: Colors.light.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
-
-  thumb: { width: 80, height: 80 },
+  thumb: {
+    width: 88,
+    height: '100%',
+  },
   thumbPlaceholder: {
-    width: 80, height: 80, backgroundColor: '#1e1b4b',
-    justifyContent: 'center', alignItems: 'center',
+    width: 88,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 110,
   },
-  thumbEmoji: { fontSize: 28 },
-
-  cardBody: { flex: 1, padding: 12, gap: 3 },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-
-  categoryPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  categoryPillText: { fontSize: 10, fontWeight: '700' },
-
+  cardBody: {
+    flex: 1,
+    padding: 12,
+    gap: 5,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  categoryPillText: {
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
   statusBadge: {
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  statusBadgeText: { fontSize: 10, fontWeight: '700' },
-
-  cardTitle: { color: 'white', fontSize: 14, fontWeight: 'bold', lineHeight: 20 },
-  cardVenue: { color: '#888', fontSize: 12 },
-  cardTime: { color: '#888', fontSize: 12 },
-
-  regRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  regText: { color: '#4f46e5', fontSize: 12, fontWeight: '600' },
-  seatText: { color: '#555', fontSize: 12 },
-
+  statusBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
+  cardTitle: {
+    color: Colors.light.text,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaText: {
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_400Regular',
+    fontSize: 11,
+    flex: 1,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  regPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  regText: {
+    color: '#16A34A',
+    fontFamily: 'Sora_700Bold',
+    fontSize: 11,
+  },
+  seatText: {
+    color: Colors.light.textSecondary,
+    fontFamily: 'Sora_400Regular',
+    fontSize: 11,
+  },
   editBtn: {
-    paddingHorizontal: 14, paddingVertical: 12, justifyContent: 'center', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
-  editBtnText: { fontSize: 18 },
-
-  emptyBox: { alignItems: 'center', marginTop: 80, gap: 10 },
-  emptyEmoji: { fontSize: 52 },
-  emptyTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
-  createButton: {
-    backgroundColor: '#4f46e5', paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 12, marginTop: 10,
+  editBtnText: {
+    color: Colors.light.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 11,
   },
-  createButtonText: { color: 'white', fontWeight: '700', fontSize: 15 },
 });

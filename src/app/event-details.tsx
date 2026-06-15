@@ -80,32 +80,43 @@ export default function EventDetails() {
   });
 
   useEffect(() => {
-    if (!id) return;
-    const load = async () => {
-      const evt = await fetchEventById(id);
-      setEvent(evt);
+  if (!id) return;
+  const load = async () => {
+    const evt = await fetchEventById(id);
+    setEvent(evt);
 
-      if (evt && currentUid) {
-        // Check if user is the organizer
-        if (evt.createdBy === currentUid) {
-          const userSnap = await getDoc(doc(db, 'users', currentUid));
-          if (
-            userSnap.exists() &&
-            userSnap.data().role === 'organizer' &&
-            userSnap.data().status === 'approved'
-          ) {
-            setIsOrganizer(true);
-          }
+    if (evt && currentUid) {
+      const userSnap = await getDoc(doc(db, 'users', currentUid));
+      
+      if (userSnap.exists()) {
+        const role = userSnap.data().role;
+        const status = userSnap.data().status;
+
+        // Check if admin
+        if (role === 'admin') {
+          setIsAdmin(true);
         }
-        // Check if user has already marked interest (in interestedUsers array)
-        if (evt.interestedUsers?.includes(currentUid)) {
-          setHasMarkedInterest(true);
+
+        // Check if organizer of THIS event
+        if (
+          evt.createdBy === currentUid &&
+          role === 'organizer' &&
+          status === 'approved'
+        ) {
+          setIsOrganizer(true);
         }
       }
-      setLoading(false);
-    };
-    load();
-  }, [id]);
+
+      // Check if user has already marked interest
+      if (evt.interestedUsers?.includes(currentUid)) {
+        setHasMarkedInterest(true);
+      }
+    }
+
+    setLoading(false);
+  };
+  load();
+}, [id]);
   useEffect(() => {
   const subscription = AppState.addEventListener(
     "change",
