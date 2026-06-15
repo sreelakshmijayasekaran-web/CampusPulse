@@ -49,6 +49,30 @@ type UserProfile = {
   college?: string;
 };
 
+// Combines deadlineDate ("2026-05-27") and deadlineTime ("23:00") into a single
+// ISO-like string ("2026-05-27T23:00") for use with Date() and isDeadlineWithin12Hours.
+// Returns null if either part is missing.
+const getDeadlineDateTime = (event: Event | null): string | null => {
+  if (!event?.deadlineDate || !event?.deadlineTime) return null;
+  return `${event.deadlineDate}T${event.deadlineTime}`;
+};
+
+// Formats deadlineDate + deadlineTime for display, e.g. "27 May 2026, 11:00 PM"
+const formatDeadline = (event: Event | null): string => {
+  const combined = getDeadlineDateTime(event);
+  if (!combined) return '';
+  const date = new Date(combined);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleString([], {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function EventDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
@@ -148,11 +172,12 @@ export default function EventDetails() {
   const count = event?.registeredUsers?.length ?? 0;
   const seatLimit = event?.seatLimit ?? null;
   const isFull = seatLimit !== null && count >= seatLimit;
+  const deadlineDateTime = getDeadlineDateTime(event);
   const deadlinePassed =
-  event?.deadline
-    ? new Date(event.deadline) < new Date()
+  deadlineDateTime
+    ? new Date(deadlineDateTime) < new Date()
     : false;
-  const deadlineSoon = event?.deadline ? isDeadlineWithin12Hours(event.deadline) : false;
+  const deadlineSoon = deadlineDateTime ? isDeadlineWithin12Hours(deadlineDateTime) : false;
   
   const registrationClosed = event?.registrationClosed ?? false;
   console.log("registrationClosed =", registrationClosed);
@@ -178,11 +203,12 @@ export default function EventDetails() {
       console.log(updated);
 
       // Send deadline notification ONLY if deadline is within 12 hours
-      if (event?.deadline && isDeadlineWithin12Hours(event.deadline)) {
+      const updatedDeadline = getDeadlineDateTime(updated);
+      if (updatedDeadline && isDeadlineWithin12Hours(updatedDeadline)) {
         await sendNotificationToUser(
           currentUid,
-          `⏰ Deadline Soon: ${event.title}`,
-          `You marked interest in "${event.title}". Registration closes in less than 12 hours: ${event.deadline}. Register now!`,
+          `⏰ Deadline Soon: ${event?.title}`,
+          `You marked interest in "${event?.title}". Registration closes in less than 12 hours: ${formatDeadline(updated)}. Register now!`,
           { type: 'deadline_reminder', eventId: id! }
         );
         Alert.alert(
@@ -207,7 +233,7 @@ export default function EventDetails() {
     const handleRegisterNow = async () => {
   console.log("REGISTER BUTTON CLICKED");
 
-  if (event?.deadline && new Date(event.deadline) < new Date()) {
+  if (deadlineDateTime && new Date(deadlineDateTime) < new Date()) {
     Alert.alert(
       "Registration Closed",
       "The registration deadline has passed."
@@ -592,7 +618,7 @@ export default function EventDetails() {
           {deadlineSoon && !isRegistered && (
             <View style={styles.deadlineBanner}>
               <Text style={styles.deadlineBannerText}>
-                ⏰ Registration closes in less than 12 hours! Deadline: {event.deadline}
+                ⏰ Registration closes in less than 12 hours! Deadline: {formatDeadline(event)}
               </Text>
             </View>
           )}
@@ -602,8 +628,8 @@ export default function EventDetails() {
             <InfoRow icon="📍" label="Venue" value={event.venue} />
             <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)}/>
             <InfoRow icon="🏷" label="Organised by" value={event.club} />
-            {event.deadline && (
-              <InfoRow icon="⏰" label="Registration Deadline" value={event.deadline} />
+            {deadlineDateTime && (
+              <InfoRow icon="⏰" label="Registration Deadline" value={formatDeadline(event)} />
             )}
           </View>
 
