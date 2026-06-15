@@ -1,6 +1,6 @@
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors, Gradients } from '../constants/theme';
 
 const FAQS = [
@@ -96,7 +96,7 @@ export default function Help() {
         <ContactRow
           icon="business-outline"
           label="Administrator"
-          value="College Event Management Team"
+          value="CampusPulse Team"
           color="#2563EB"
           bg="#DBEAFE"
         />
@@ -104,19 +104,28 @@ export default function Help() {
         <ContactRow
           icon="mail-outline"
           label="Support Email"
-          value="support@campuspulse.edu"
+          value="campuspulsesupport@gmail.com"
           color="#059669"
           bg="#D1FAE5"
-          onPress={() => Linking.openURL('mailto:support@campuspulse.edu')}
+          onPress={() => Linking.openURL('mailto:campuspulsesupport@gmail.com')}
         />
         <View style={styles.divider} />
         <ContactRow
           icon="call-outline"
           label="Phone"
-          value="+91 98765 43210"
+          value="+91 86069 08717"
           color="#7C3AED"
           bg="#EDE9FE"
-          onPress={() => Linking.openURL('tel:+919876543210')}
+          onPress={() => Linking.openURL('tel:+918606908717')}
+        />
+        <View style={styles.divider} />
+        <ContactRow
+          icon="call-outline"
+          label="Phone"
+          value="+91 97450 24712"
+          color="#7C3AED"
+          bg="#EDE9FE"
+          onPress={() => Linking.openURL('tel:+919745024712')}
         />
       </View>
 

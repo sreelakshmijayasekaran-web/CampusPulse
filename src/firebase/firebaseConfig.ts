@@ -1,5 +1,7 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+// @ts-ignore - getReactNativePersistence exists at runtime but is missing from current type defs
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -12,7 +14,16 @@ const firebaseConfig = {
   measurementId: "G-JWK51FVNLV"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (e) {
+  auth = getAuth(app);
+}
+
+export { auth };
 export const db = getFirestore(app);

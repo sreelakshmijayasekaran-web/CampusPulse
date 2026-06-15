@@ -10,13 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/firebaseConfig';
 import { Colors, Gradients } from '../constants/theme';
+import { auth, db } from '../firebase/firebaseConfig';
 
 export default function Settings() {
   const user = auth.currentUser;
@@ -49,20 +49,32 @@ export default function Settings() {
       return;
     }
 
-    setPwLoading(true);
-    try {
-      const credential = EmailAuthProvider.credential(user!.email!, currentPassword);
-      await reauthenticateWithCredential(user!, credential);
-      await updatePassword(user!, newPassword);
-      Alert.alert('Success', 'Password updated successfully.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update password.');
-    } finally {
-      setPwLoading(false);
-    }
+    Alert.alert(
+      'Update Password',
+      'Are you sure you want to update your password?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async () => {
+            setPwLoading(true);
+            try {
+              const credential = EmailAuthProvider.credential(user!.email!, currentPassword);
+              await reauthenticateWithCredential(user!, credential);
+              await updatePassword(user!, newPassword);
+              Alert.alert('Success', 'Password updated successfully.');
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to update password.');
+            } finally {
+              setPwLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteAccount = () => {

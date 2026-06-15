@@ -10,6 +10,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -65,8 +66,21 @@ export default function Profile() {
   }, []);
 
   const handleLogout = async () => {
-    await auth.signOut();
-    router.replace('/login');
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await auth.signOut();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
