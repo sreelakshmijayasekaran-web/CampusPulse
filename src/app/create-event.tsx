@@ -32,13 +32,13 @@ export default function CreateEvent() {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [registerLink, setRegisterLink] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineTime, setDeadlineTime] = useState('');
   const [seatLimit, setSeatLimit] = useState('');
   const [noLimit, setNoLimit] = useState(true);
   const [posterUrl, setPosterUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [notifying, setNotifying] = useState(false);
 
   const CLOUDINARY_CLOUD_NAME = 'dweb7pnto';
   const CLOUDINARY_UPLOAD_PRESET = 'event_posters';
@@ -68,7 +68,8 @@ export default function CreateEvent() {
           setCategory(event.category ?? '');
           setDescription(event.description ?? '');
           setRegisterLink(event.registerLink ?? '');
-          setDeadline(event.deadline ?? '');
+          setDeadlineDate(event.deadlineDate ?? '');
+          setDeadlineTime(event.deadlineTime ?? '');
           if (event.seatLimit) {
             setSeatLimit(String(event.seatLimit));
             setNoLimit(false);
@@ -91,7 +92,6 @@ export default function CreateEvent() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'] as any,
       allowsEditing: true,
-      aspect: [16, 9],
       quality: 0.8,
     });
     if (result.canceled) return;
@@ -155,7 +155,8 @@ export default function CreateEvent() {
         category,
         description,
         registerLink,
-        deadline,
+        deadlineDate,
+        deadlineTime,
         seatLimit: noLimit ? null : Number(seatLimit),
         posterUrl: posterUrl.trim() || null,
 
@@ -168,23 +169,8 @@ export default function CreateEvent() {
         Alert.alert('Updated!', 'Event details have been updated.');
         router.back();
       } else {
-        const newEventId = await createEvent(eventData);
-        
-        // Notify all students & other organizers about the new event
-        // Note: Event is "pending" at this point (admin must approve).
-        // We notify now; once approved students will see it. 
-        // If you prefer to notify only on approval, move this to admin.tsx approve action.
-        setNotifying(true);
-        try {
-          const user = auth.currentUser;
-          
-        } catch (notifErr) {
-          console.warn('Notification broadcast failed (non-critical):', notifErr);
-        } finally {
-          setNotifying(false);
-        }
-
-        Alert.alert('Submitted!', '⏳ Admin will review and approve your event shortly. All students have been notified.');
+        await createEvent(eventData);
+        Alert.alert('Submitted!', '⏳ Admin will review and approve your event shortly.');
         router.replace('/');
       }
     } catch (err: any) {
@@ -246,14 +232,6 @@ export default function CreateEvent() {
         <Text style={styles.approvedText}>✅ Approved Organizer</Text>
       </View>
 
-      {!isEditMode && (
-        <View style={styles.notifInfoBox}>
-          <Text style={styles.notifInfoText}>
-            📣 All students & organizers will receive a notification when you submit this event.
-          </Text>
-        </View>
-      )}
-
       {/* POSTER UPLOAD */}
       <Text style={styles.label}>Event Poster</Text>
       <TouchableOpacity style={styles.posterPicker} onPress={pickAndUploadImage} disabled={uploading}>
@@ -267,7 +245,7 @@ export default function CreateEvent() {
         ) : (
           <View style={styles.posterPlaceholder}>
             <Text style={styles.posterIcon}>🖼️</Text>
-            <Text style={styles.posterPickerText}>Tap to upload poster (16:9)</Text>
+            <Text style={styles.posterPickerText}>Tap to upload poster</Text>
             <Text style={styles.posterPickerSub}>JPG / PNG recommended</Text>
           </View>
         )}
@@ -295,7 +273,7 @@ export default function CreateEvent() {
 
 <Text style={styles.label}>Event Time *</Text>
 <TextInput
-  placeholder="10:00"
+  placeholder="HH:MM (24 hours)"
   placeholderTextColor="#555"
   style={styles.input}
   value={time}
@@ -316,7 +294,7 @@ export default function CreateEvent() {
         numberOfLines={4}
       />
 
-      <Text style={styles.label}>Registration Link (optional)</Text>
+      <Text style={styles.label}>Registration Link</Text>
       <TextInput
         placeholder="https://forms.google.com/..."
         placeholderTextColor="#555"
@@ -327,13 +305,22 @@ export default function CreateEvent() {
         keyboardType="url"
       />
 
-      <Text style={styles.label}>Registration Deadline (optional)</Text>
+      <Text style={styles.label}>Registration Deadline Date</Text>
       <TextInput
-        placeholder="e.g. 12 Feb 2026, 11:59 PM"
+        placeholder="2026-05-27"
         placeholderTextColor="#555"
         style={styles.input}
-        value={deadline}
-        onChangeText={setDeadline}
+        value={deadlineDate}
+        onChangeText={setDeadlineDate}
+      />
+
+      <Text style={styles.label}>Registration Deadline Time </Text>
+      <TextInput
+        placeholder="HH:MM (24 hours)"
+        placeholderTextColor="#555"
+        style={styles.input}
+        value={deadlineTime}
+        onChangeText={setDeadlineTime}
       />
 
       <Text style={styles.label}>Seat Limit</Text>
@@ -384,18 +371,18 @@ export default function CreateEvent() {
       )}
 
       <TouchableOpacity
-        style={[styles.button, (loading || uploading || notifying) && styles.buttonDisabled]}
+        style={[styles.button, (loading || uploading) && styles.buttonDisabled]}
         onPress={handleSubmit}
-        disabled={loading || uploading || notifying}
+        disabled={loading || uploading}
       >
-        {loading || notifying ? (
+        {loading ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <ActivityIndicator color="white" />
-            <Text style={styles.buttonText}>{notifying ? 'Notifying students…' : 'Submitting…'}</Text>
+            <Text style={styles.buttonText}>Submitting…</Text>
           </View>
         ) : (
           <Text style={styles.buttonText}>
-            {isEditMode ? '💾 Save Changes' : '📣 Submit & Notify Students'}
+            {isEditMode ? '💾 Save Changes' : '📣 Submit'}
           </Text>
         )}
       </TouchableOpacity>

@@ -15,8 +15,9 @@ import { Link, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { Event, fetchEvents } from '../firebase/eventService';
+import { sendEventTimeReminderToRegistered } from '../firebase/notificationService';
 import { auth, db } from '../firebase/firebaseConfig';
 import { Colors, Gradients } from '../constants/theme';
 
@@ -31,6 +32,55 @@ const CATEGORY_STYLES: Record<string, { bg: string; text: string; icon: keyof ty
   Sports: { bg: '#F3E8FF', text: '#7E22CE', icon: 'football-outline' },
   Other: { bg: '#F1F5F9', text: '#475569', icon: 'apps-outline' },
 };
+
+// ── Event-time reminder check ──────────────────────────────────────────────
+// For each approved event with registered users, check if event.time falls
+// within the 12h or 3h reminder window. If so (and not already notified),
+// notify all registeredUsers and mark the event so it isn't sent again.
+async function checkAndSendEventTimeReminders(events: Event[]) {
+  const now = Date.now();
+
+  for (const event of events) {
+    if (!event.time || !event.registeredUsers?.length) continue;
+
+    const eventTime = new Date(event.time).getTime();
+    if (isNaN(eventTime)) continue;
+
+    const hoursLeft = (eventTime - now) / (1000 * 60 * 60);
+
+    // 12-hour window: event is at most 12h away (and hasn't started yet)
+    if (hoursLeft <= 12 && hoursLeft > 0 && !(event as any).notified12h) {
+      try {
+        await sendEventTimeReminderToRegistered(
+          event.id,
+          event.title,
+          event.registeredUsers,
+          12,
+          event.time
+        );
+        await updateDoc(doc(db, 'events', event.id), { notified12h: true });
+      } catch (err) {
+        console.error('Failed to send 12h reminder for event', event.id, err);
+      }
+    }
+
+    // 3-hour window: event is at most 3h away (and hasn't started yet)
+    if (hoursLeft <= 3 && hoursLeft > 0 && !(event as any).notified3h) {
+      try {
+        await sendEventTimeReminderToRegistered(
+          event.id,
+          event.title,
+          event.registeredUsers,
+          3,
+          event.time
+        );
+        await updateDoc(doc(db, 'events', event.id), { notified3h: true });
+      } catch (err) {
+        console.error('Failed to send 3h reminder for event', event.id, err);
+      }
+    }
+  }
+}
 
 export default function HomeScreen() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -76,7 +126,12 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchEvents()
-      .then(setEvents)
+      .then((fetched) => {
+        setEvents(fetched);
+        // Fire-and-forget: check for events whose start time is 12h/3h away
+        // and notify registered users (in-app notification doc).
+        checkAndSendEventTimeReminders(fetched).catch(console.error);
+      })
       .catch(console.error)
       .finally(() => setLoadingEvents(false));
   }, []);
@@ -300,6 +355,12 @@ function EventCard({ event, status, accent, faded }: { event: Event; status: str
   const category = event.category || 'Other';
   const palette = CATEGORY_STYLES[category] ?? CATEGORY_STYLES.Other;
 
+const formattedTime = event.time
+    ? new Date(event.time).toLocaleString([], {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      })
+    : null;
   return (
     <TouchableOpacity
       style={[styles.posterCard, faded && styles.fadedCard]}
@@ -329,6 +390,9 @@ function EventCard({ event, status, accent, faded }: { event: Event; status: str
         <Text style={styles.posterTitle} numberOfLines={2}>{event.title}</Text>
         <MetaRow icon="location-outline" text={event.venue} />
         <MetaRow icon="business-outline" text={event.club} />
+         {formattedTime && (
+          <MetaRow icon="calendar-outline" text={formattedTime} />
+        )}
         <View style={styles.cardFooter}>
           <View style={styles.peoplePill}>
             <Ionicons name="people-outline" size={14} color={Colors.light.success} />

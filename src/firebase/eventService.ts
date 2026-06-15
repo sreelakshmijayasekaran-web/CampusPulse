@@ -29,7 +29,8 @@ export type Event = {
   interestedUsers?: string[];  // users who only marked interest
   status: 'pending' | 'approved' | 'rejected';
   createdBy: string;
-  deadline?: string;
+  deadlineDate?: string;
+  deadlineTime?: string;
   seatLimit?: number | null;
   posterUrl?: string | null;
   eventDate?: string;
@@ -47,7 +48,8 @@ export async function createEvent(data: {
   category: string;
   description: string;
   registerLink: string;
-  deadline: string;
+  deadlineDate: string;
+  deadlineTime: string;
   seatLimit: number | null;
   posterUrl: string | null;
 }) {
@@ -178,6 +180,18 @@ export async function unmarkInterest(eventId: string) {
 
 // ── Deadline helpers ──────────────────────────────────────────────────────────
 
+// Combines separate deadlineDate ("2026-05-27") and deadlineTime ("23:00") fields
+// into a single Date object. Returns null if either part is missing/invalid.
+export function getDeadlineDate(
+  deadlineDate?: string,
+  deadlineTime?: string
+): Date | null {
+  if (!deadlineDate?.trim() || !deadlineTime?.trim()) return null;
+  const d = new Date(`${deadlineDate}T${deadlineTime}`);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
 export function parseDeadline(deadlineStr: string): Date | null {
   if (!deadlineStr?.trim()) return null;
   const d = new Date(deadlineStr);
@@ -185,6 +199,8 @@ export function parseDeadline(deadlineStr: string): Date | null {
   return null;
 }
 
+// Accepts a combined "YYYY-MM-DDTHH:MM" string (build it with getDeadlineDate
+// or by concatenating deadlineDate + 'T' + deadlineTime before calling this).
 export function isDeadlineWithin12Hours(deadlineStr?: string): boolean {
   if (!deadlineStr) return false;
   const deadline = parseDeadline(deadlineStr);

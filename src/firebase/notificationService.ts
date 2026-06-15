@@ -134,3 +134,41 @@ export async function sendDeadlineReminderToRegistered(
   });
   await batch.commit();
 }
+
+/**
+ * Notify all registered users that the event starts soon (12h or 3h before event.time).
+ * Caller is responsible for checking the time window and avoiding duplicate sends
+ * (e.g. via notified12h / notified3h flags on the event document).
+ */
+export async function sendEventTimeReminderToRegistered(
+  eventId: string,
+  eventTitle: string,
+  registeredUserIds: string[],
+  hoursBefore: 12 | 3,
+  eventTime: string
+) {
+  if (!registeredUserIds.length) return;
+
+  const formattedTime = new Date(eventTime).toLocaleString([], {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const batch = writeBatch(db);
+  registeredUserIds.forEach((uid) => {
+    const ref = doc(collection(db, 'notifications'));
+    batch.set(ref, {
+      uid,
+      title: `⏰ Event in ${hoursBefore} hours: ${eventTitle}`,
+      body: `Your event starts at ${formattedTime}. Don't forget!`,
+      read: false,
+      createdAt: serverTimestamp(),
+      type: 'event_time_reminder',
+      eventId,
+    });
+  });
+  await batch.commit();
+}
