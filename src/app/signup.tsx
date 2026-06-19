@@ -1,24 +1,25 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
+  View,
 } from 'react-native';
-import { Link, router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { signUp } from '../firebase/authService';
 import { Colors, Gradients } from '../constants/theme';
+import { signUp } from '../firebase/authService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'PG'];
+const STUDENT_EMAIL_DOMAIN = '@gecskp.ac.in';
 
 export default function Signup() {
   const [name, setName] = useState('');
@@ -51,6 +52,14 @@ export default function Signup() {
     if (password !== confirmPassword) {
       alert('Passwords do not match');
       return;
+    }
+
+    if (role === 'student') {
+      const emailLower = email.trim().toLowerCase();
+      if (!emailLower.endsWith(STUDENT_EMAIL_DOMAIN)) {
+        alert(`Students must sign up using their college email ID (${STUDENT_EMAIL_DOMAIN})`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -176,7 +185,7 @@ export default function Signup() {
               label="EMAIL"
               value={email}
               onChangeText={setEmail}
-              placeholder="you@college.edu"
+              placeholder={role === 'student' ? 'you@gecskp.ac.in' : 'you@example.com'}
               keyboardType="email-address"
               autoCapitalize="none"
             />

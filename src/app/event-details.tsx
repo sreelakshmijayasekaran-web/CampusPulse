@@ -1,24 +1,27 @@
 // app/event-details.tsx
-import { AppState } from "react-native";
-import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
-import { useEffect, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
+import { router, useLocalSearchParams } from 'expo-router';
+import { deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { useEffect, useRef, useState } from 'react';
 
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  arrayUnion,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
   Image,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Gradients } from '../constants/theme';
 import {
   Event,
@@ -30,11 +33,6 @@ import { auth, db } from '../firebase/firebaseConfig';
 import {
   sendNotificationToUser,
 } from '../firebase/notificationService';
-import {
-  arrayUnion,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 380;
@@ -49,15 +47,11 @@ type UserProfile = {
   college?: string;
 };
 
-// Combines deadlineDate ("2026-05-27") and deadlineTime ("23:00") into a single
-// ISO-like string ("2026-05-27T23:00") for use with Date() and isDeadlineWithin12Hours.
-// Returns null if either part is missing.
 const getDeadlineDateTime = (event: Event | null): string | null => {
   if (!event?.deadlineDate || !event?.deadlineTime) return null;
   return `${event.deadlineDate}T${event.deadlineTime}`;
 };
 
-// Formats deadlineDate + deadlineTime for display, e.g. "27 May 2026, 11:00 PM"
 const formatDeadline = (event: Event | null): string => {
   const combined = getDeadlineDateTime(event);
   if (!combined) return '';
@@ -85,7 +79,6 @@ export default function EventDetails() {
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
-  // Track which actions the user has taken THIS SESSION (persisted in Firestore via separate fields)
   const [hasMarkedInterest, setHasMarkedInterest] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -104,50 +97,45 @@ export default function EventDetails() {
   });
 
   useEffect(() => {
-  if (!id) return;
-  const load = async () => {
-    const evt = await fetchEventById(id);
-    setEvent(evt);
+    if (!id) return;
+    const load = async () => {
+      const evt = await fetchEventById(id);
+      setEvent(evt);
 
-    if (evt && currentUid) {
-      const userSnap = await getDoc(doc(db, 'users', currentUid));
-      
-      if (userSnap.exists()) {
-        const role = userSnap.data().role;
-        const status = userSnap.data().status;
+      if (evt && currentUid) {
+        const userSnap = await getDoc(doc(db, 'users', currentUid));
 
-        // Check if admin
-        if (role === 'admin') {
-          setIsAdmin(true);
+        if (userSnap.exists()) {
+          const role = userSnap.data().role;
+          const status = userSnap.data().status;
+
+          if (role === 'admin') {
+            setIsAdmin(true);
+          }
+
+          if (
+            evt.createdBy === currentUid &&
+            role === 'organizer' &&
+            status === 'approved'
+          ) {
+            setIsOrganizer(true);
+          }
         }
 
-        // Check if organizer of THIS event
-        if (
-          evt.createdBy === currentUid &&
-          role === 'organizer' &&
-          status === 'approved'
-        ) {
-          setIsOrganizer(true);
+        if (evt.interestedUsers?.includes(currentUid)) {
+          setHasMarkedInterest(true);
         }
       }
 
-      // Check if user has already marked interest
-      if (evt.interestedUsers?.includes(currentUid)) {
-        setHasMarkedInterest(true);
-      }
-    }
+      setLoading(false);
+    };
+    load();
+  }, [id]);
 
-    setLoading(false);
-  };
-  load();
-}, [id]);
-  
 
-  // User is in registeredUsers → fully registered
   const isRegistered = event?.registeredUsers?.includes(currentUid ?? '') ?? false;
   const isPending =
-  event?.pendingRegistrations?.includes(currentUid ?? '') ?? false;
-  // User is in interestedUsers → marked interest but not yet registered
+    event?.pendingRegistrations?.includes(currentUid ?? '') ?? false;
   const isInterested = event?.interestedUsers?.includes(currentUid ?? '') ?? false;
 
   const count = event?.registeredUsers?.length ?? 0;
@@ -155,17 +143,20 @@ export default function EventDetails() {
   const isFull = seatLimit !== null && count >= seatLimit;
   const deadlineDateTime = getDeadlineDateTime(event);
   const deadlinePassed =
-  deadlineDateTime
-    ? new Date(deadlineDateTime) < new Date()
-    : false;
+    deadlineDateTime
+      ? new Date(deadlineDateTime) < new Date()
+      : false;
   const deadlineSoon = deadlineDateTime ? isDeadlineWithin12Hours(deadlineDateTime) : false;
-  
-  const registrationClosed = event?.registrationClosed ?? false;
-  console.log("registrationClosed =", registrationClosed);
 
-  // ── MARK INTEREST ────────────────────────────────────────────────────────────
-  // Adds user to interestedUsers[] (NOT registeredUsers)
-  // Sends a deadline notification ONLY if deadline is within 12 hours
+  const registrationClosed = event?.registrationClosed ?? false;
+  const requiresRegistration = event?.requiresRegistration ?? true;
+
+  // Who can see the meeting link: everyone if open event, otherwise only
+  // people who are registered, the organizer, or an admin.
+  const canSeeMeetingLink =
+    !!event?.meetingLink &&
+    (!requiresRegistration || isRegistered || isOrganizer || isAdmin);
+
   const handleMarkInterest = async () => {
     if (!currentUid) {
       Alert.alert('Login required', 'Please log in first.');
@@ -173,7 +164,6 @@ export default function EventDetails() {
     }
     setInterestLoading(true);
     try {
-      // Add to interestedUsers (separate field, not registeredUsers)
       await updateDoc(doc(db, 'events', id!), {
         interestedUsers: arrayUnion(currentUid),
       });
@@ -181,9 +171,7 @@ export default function EventDetails() {
       setHasMarkedInterest(true);
       const updated = await fetchEventById(id!);
       setEvent(updated);
-      console.log(updated);
 
-      // Send deadline notification ONLY if deadline is within 12 hours
       const updatedDeadline = getDeadlineDateTime(updated);
       if (updatedDeadline && isDeadlineWithin12Hours(updatedDeadline)) {
         await sendNotificationToUser(
@@ -210,84 +198,80 @@ export default function EventDetails() {
   };
 
   const handleRegisterNow = async () => {
-  if (deadlineDateTime && new Date(deadlineDateTime) < new Date()) {
-    Alert.alert(
-      "Registration Closed",
-      "The registration deadline has passed."
-    );
-    return;
-  }
-
-  if (!currentUid) {
-    Alert.alert("Login required", "Please log in first.");
-    return;
-  }
-
-  if (isFull) {
-    Alert.alert(
-      "Event Full",
-      "Sorry, this event has reached its seat limit."
-    );
-    return;
-  }
-
-  setRegisterLoading(true);
-
-  try {
-    // Recheck seat availability
-    const fresh = await fetchEventById(id!);
-
-    const freshCount = fresh?.registeredUsers?.length ?? 0;
-    const freshLimit = fresh?.seatLimit ?? null;
-
-    if (freshLimit !== null && freshCount >= freshLimit) {
-      Alert.alert("Event Full", "Sorry, no seats left.");
-      return;
-    }
-
-    const formLink = event?.registerLink?.trim();
-
-    if (!formLink) {
+    if (deadlineDateTime && new Date(deadlineDateTime) < new Date()) {
       Alert.alert(
-        "Error",
-        "No registration link found for this event."
+        "Registration Closed",
+        "The registration deadline has passed."
       );
       return;
     }
 
-    const supported = await Linking.canOpenURL(formLink);
+    if (!currentUid) {
+      Alert.alert("Login required", "Please log in first.");
+      return;
+    }
 
-    if (!supported) {
+    if (isFull) {
       Alert.alert(
-        "Error",
-        "Cannot open registration form."
+        "Event Full",
+        "Sorry, this event has reached its seat limit."
       );
       return;
     }
 
-    // Store event id for confirmation screen
-    (global as any).registrationEventId = id;
+    setRegisterLoading(true);
 
-    // Open Google Form
-    await Linking.openURL(formLink);
+    try {
+      const fresh = await fetchEventById(id!);
 
-    // Navigate to confirmation page
-    router.push(
-      `/registration-confirmation?eventId=${id}`
-    );
+      const freshCount = fresh?.registeredUsers?.length ?? 0;
+      const freshLimit = fresh?.seatLimit ?? null;
 
-  } catch (err: any) {
-    console.log("REGISTER ERROR =", err);
+      if (freshLimit !== null && freshCount >= freshLimit) {
+        Alert.alert("Event Full", "Sorry, no seats left.");
+        return;
+      }
 
-    Alert.alert(
-      "Error",
-      err?.message || "Unknown error"
-    );
-  } finally {
-    setRegisterLoading(false);
-  }
-};
-  // ── UNREGISTER ───────────────────────────────────────────────────────────────
+      const formLink = event?.registerLink?.trim();
+
+      if (!formLink) {
+        Alert.alert(
+          "Error",
+          "No registration link found for this event."
+        );
+        return;
+      }
+
+      const supported = await Linking.canOpenURL(formLink);
+
+      if (!supported) {
+        Alert.alert(
+          "Error",
+          "Cannot open registration form."
+        );
+        return;
+      }
+
+      (global as any).registrationEventId = id;
+
+      await Linking.openURL(formLink);
+
+      router.push(
+        `/registration-confirmation?eventId=${id}`
+      );
+
+    } catch (err: any) {
+      console.log("REGISTER ERROR =", err);
+
+      Alert.alert(
+        "Error",
+        err?.message || "Unknown error"
+      );
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
+
   const handleUnmarkInterest = async () => {
     Alert.alert(
       'Remove Registration',
@@ -313,100 +297,100 @@ export default function EventDetails() {
       ]
     );
   };
+
   const handleToggleRegistration = async () => {
-  try {
-    await updateDoc(doc(db, "events", id!), {
-      registrationClosed: !event?.registrationClosed,
-    });
-
-    Alert.alert(
-      event?.registrationClosed
-        ? "Registration Opened"
-        : "Registration Closed",
-      event?.registrationClosed
-        ? "Students can register again."
-        : "Students can no longer register."
-    );
-
-    const updated = await fetchEventById(id!);
-    setEvent(updated);
-
-  } catch (err: any) {
-    Alert.alert("Error", err.message);
-  }
-};
-//Deleting the event
-    const handleDeleteEvent = async () => {
-
-  const eventId = Array.isArray(id) ? id[0] : id;
-
-  if (!eventId) {
-    Alert.alert("Error", "Event ID not found.");
-    return;
-  }
-
-  try {
-
-    // ── ADMIN → HARD DELETE ──
-    if (isAdmin) {
-
-      await deleteDoc(doc(db, "events", eventId));
-
-      Alert.alert(
-        "Deleted",
-        "Event permanently deleted."
-      );
-    }
-
-    // ── ORGANIZER → SOFT DELETE ──
-    else {
-
-      await updateDoc(doc(db, "events", eventId), {
-        status: "deleted",
-        deletedAt: serverTimestamp(),
+    try {
+      await updateDoc(doc(db, "events", id!), {
+        registrationClosed: !event?.registrationClosed,
       });
 
       Alert.alert(
-        "Removed",
-        "Event removed successfully."
+        event?.registrationClosed
+          ? "Registration Opened"
+          : "Registration Closed",
+        event?.registrationClosed
+          ? "Students can register again."
+          : "Students can no longer register."
       );
+
+      const updated = await fetchEventById(id!);
+      setEvent(updated);
+
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+
+    const eventId = Array.isArray(id) ? id[0] : id;
+
+    if (!eventId) {
+      Alert.alert("Error", "Event ID not found.");
+      return;
     }
 
-    router.replace("/my-events");
+    try {
 
-  } catch (err: any) {
+      if (isAdmin) {
 
-    console.log("DELETE ERROR:", err);
+        await deleteDoc(doc(db, "events", eventId));
 
-    Alert.alert(
-      "Delete Failed",
-      err.message
-    );
-  }
-};
+        Alert.alert(
+          "Deleted",
+          "Event permanently deleted."
+        );
+      }
+
+      else {
+
+        await updateDoc(doc(db, "events", eventId), {
+          status: "deleted",
+          deletedAt: serverTimestamp(),
+        });
+
+        Alert.alert(
+          "Removed",
+          "Event removed successfully."
+        );
+      }
+
+      router.replace("/my-events");
+
+    } catch (err: any) {
+
+      console.log("DELETE ERROR:", err);
+
+      Alert.alert(
+        "Delete Failed",
+        err.message
+      );
+    }
+  };
+
   const handleCloseRegistration = async () => {
-  try {
-    await updateDoc(doc(db, "events", id!), {
-      registrationClosed: true,
-    });
+    try {
+      await updateDoc(doc(db, "events", id!), {
+        registrationClosed: true,
+      });
 
-    setEvent((prev) =>
-      prev
-        ? {
-            ...prev,
-            registrationClosed: true,
-          }
-        : prev
-    );
+      setEvent((prev) =>
+        prev
+          ? {
+              ...prev,
+              registrationClosed: true,
+            }
+          : prev
+      );
 
-    Alert.alert(
-      "Registration Closed",
-      "Registrations have been closed successfully."
-    );
-  } catch (err: any) {
-    Alert.alert("Error", err.message);
-  }
-};
+      Alert.alert(
+        "Registration Closed",
+        "Registrations have been closed successfully."
+      );
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
+  };
 
 
   const loadRegisteredStudents = async () => {
@@ -449,11 +433,22 @@ export default function EventDetails() {
   };
   const now = new Date();
 
-    const eventDate = event?.time
-      ? new Date(event.time)
-      : null;
+  const eventDate = event?.time
+    ? new Date(event.time)
+    : null;
 
-    const eventEnded = eventDate && eventDate < now;
+  const eventEnded = eventDate && eventDate < now;
+
+  const handleOpenMeetingLink = async () => {
+    const link = event?.meetingLink?.trim();
+    if (!link) return;
+    const supported = await Linking.canOpenURL(link);
+    if (!supported) {
+      Alert.alert('Error', 'Cannot open this link.');
+      return;
+    }
+    await Linking.openURL(link);
+  };
 
   if (loading) {
     return (
@@ -478,7 +473,6 @@ export default function EventDetails() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-      {/* Floating top bar */}
       <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.floatingHeaderBtn}>
           <Text style={styles.floatingHeaderBtnText}>← Back</Text>
@@ -551,9 +545,18 @@ export default function EventDetails() {
 
         {/* Content below hero */}
         <View style={styles.content}>
-          
+
+          {/* Open event banner */}
+          {!requiresRegistration && (
+            <View style={styles.openEventBanner}>
+              <Text style={styles.openEventBannerText}>
+                🌐 Open Event — anyone can join, no registration needed.
+              </Text>
+            </View>
+          )}
+
           {/* Deadline warning banner */}
-          {deadlineSoon && !isRegistered && (
+          {requiresRegistration && deadlineSoon && !isRegistered && (
             <View style={styles.deadlineBanner}>
               <Text style={styles.deadlineBannerText}>
                 ⏰ Registration closes in less than 12 hours! Deadline: {formatDeadline(event)}
@@ -566,30 +569,57 @@ export default function EventDetails() {
             <InfoRow icon="📍" label="Venue" value={event.venue} />
             <InfoRow icon="🕒" label="Date & Time" value={formatDateTime(event.time)}/>
             <InfoRow icon="🏷" label="Organised by" value={event.club} />
-            {deadlineDateTime && (
+            {requiresRegistration && deadlineDateTime && (
               <InfoRow icon="⏰" label="Registration Deadline" value={formatDeadline(event)} />
             )}
           </View>
 
-          {/* Seat count card */}
-          <View style={styles.countCard}>
-            <Text style={styles.countNumber}>{count}</Text>
-            <Text style={styles.countLabel}>
-              student{count !== 1 ? 's' : ''} registered
-            </Text>
-            {seatLimit !== null && (
-              <View style={[styles.seatBadge, isFull && styles.seatBadgeFull]}>
-                <Text style={[styles.seatBadgeText, isFull && styles.seatBadgeTextFull]}>
-                  {isFull
-                    ? '🔴 Full'
-                    : `🟢 ${seatLimit - count} seat${seatLimit - count !== 1 ? 's' : ''} left`}
+          {/* Meeting Link Card */}
+          {event.meetingLink && (
+            canSeeMeetingLink ? (
+              <View style={styles.meetingCard}>
+                <Text style={styles.meetingCardTitle}>🔗 Meeting Link</Text>
+                {event.meetingLinkDescription ? (
+                  <Text style={styles.meetingCardDesc}>{event.meetingLinkDescription}</Text>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.meetingButton}
+                  onPress={handleOpenMeetingLink}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.meetingButtonText}>Join Meeting →</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.meetingLockedCard}>
+                <Text style={styles.meetingLockedText}>
+                  🔒 The meeting link will be visible once you register for this event.
                 </Text>
               </View>
-            )}
-          </View>
+            )
+          )}
 
-          {/* Organizer Section: registered students */}
-          {isOrganizer && (
+          {/* Seat count card — only relevant when registration is required */}
+          {requiresRegistration && (
+            <View style={styles.countCard}>
+              <Text style={styles.countNumber}>{count}</Text>
+              <Text style={styles.countLabel}>
+                student{count !== 1 ? 's' : ''} registered
+              </Text>
+              {seatLimit !== null && (
+                <View style={[styles.seatBadge, isFull && styles.seatBadgeFull]}>
+                  <Text style={[styles.seatBadgeText, isFull && styles.seatBadgeTextFull]}>
+                    {isFull
+                      ? '🔴 Full'
+                      : `🟢 ${seatLimit - count} seat${seatLimit - count !== 1 ? 's' : ''} left`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Organizer Section: registered students (only meaningful if registration required) */}
+          {isOrganizer && requiresRegistration && (
             <View style={styles.organizerSection}>
               <TouchableOpacity style={styles.studentsToggle} onPress={toggleStudents}>
                 <Text style={styles.studentsToggleText}>
@@ -632,7 +662,6 @@ export default function EventDetails() {
                 </View>
               )}
 
-              {/* Toggle Event status button */}
               <TouchableOpacity
                 style={styles.closeRegistrationBtn}
                 onPress={handleToggleRegistration}
@@ -644,7 +673,15 @@ export default function EventDetails() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Delete Event button */}
+              <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
+                <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Organizer delete button for open events (no students list/close-registration needed) */}
+          {isOrganizer && !requiresRegistration && (
+            <View style={styles.organizerSection}>
               <TouchableOpacity style={styles.deleteEventBtn} onPress={handleDeleteEvent}>
                 <Text style={styles.deleteEventBtnText}>🗑 Delete Event</Text>
               </TouchableOpacity>
@@ -656,37 +693,43 @@ export default function EventDetails() {
           <Text style={styles.description}>
             {event.description?.trim() ? event.description : 'No description provided yet.'}
           </Text>
-          
-          {/* ── CTA Section ── */}
-          {eventEnded ? (
-  <View style={styles.fullBadge}>
-    <Text style={styles.fullBadgeText}>
-      ✅ Event Completed
-    </Text>
-  </View>
-) : isRegistered ? (
-  <View>
-    <View style={styles.registeredBadge}>
-      <Text style={styles.registeredBadgeText}>
-        ✅ You're Registered
-      </Text>
-    </View>
 
-    <TouchableOpacity
-      style={styles.unregisterButton}
-      onPress={handleUnmarkInterest}
-      disabled={unregLoading}
-    >
-      {unregLoading ? (
-        <ActivityIndicator color={Colors.light.error} />
-      ) : (
-        <Text style={styles.unregisterButtonText}>
-          ✕ Remove Registration
-        </Text>
-      )}
-    </TouchableOpacity>
-  </View>
-) : registrationClosed ? (
+          {/* ── CTA Section ── */}
+          {!requiresRegistration ? (
+            <View style={styles.openBadge}>
+              <Text style={styles.openBadgeText}>
+                🌐 No registration needed — just show up{event.meetingLink ? ' or join the link above' : ''}.
+              </Text>
+            </View>
+          ) : eventEnded ? (
+            <View style={styles.fullBadge}>
+              <Text style={styles.fullBadgeText}>
+                ✅ Event Completed
+              </Text>
+            </View>
+          ) : isRegistered ? (
+            <View>
+              <View style={styles.registeredBadge}>
+                <Text style={styles.registeredBadgeText}>
+                  ✅ You're Registered
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.unregisterButton}
+                onPress={handleUnmarkInterest}
+                disabled={unregLoading}
+              >
+                {unregLoading ? (
+                  <ActivityIndicator color={Colors.light.error} />
+                ) : (
+                  <Text style={styles.unregisterButtonText}>
+                    ✕ Remove Registration
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : registrationClosed ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>
                 🚫 Registration Closed By Organizer
@@ -705,9 +748,7 @@ export default function EventDetails() {
               <Text style={styles.fullBadgeText}>🔴 Registrations Closed — Event Full</Text>
             </View>
           ) : (
-            // Show both buttons
             <View style={styles.ctaContainer}>
-              {/* Mark Interest button — only if not yet interested */}
               {!isInterested && (
                 <TouchableOpacity
                   style={[
@@ -735,14 +776,12 @@ export default function EventDetails() {
                 </TouchableOpacity>
               )}
 
-              {/* Already marked interest — show badge */}
               {isInterested && (
                 <View style={styles.interestedBadge}>
                   <Text style={styles.interestedBadgeText}>⭐ Interest Marked</Text>
                 </View>
               )}
 
-              {/* Register Now button — always shown when not registered */}
               {isPending ? (
                 <View style={styles.interestedBadge}>
                   <Text style={styles.interestedBadgeText}>
@@ -946,6 +985,21 @@ const styles = StyleSheet.create({
     paddingTop: 24,
   },
 
+  openEventBanner: {
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  openEventBannerText: {
+    color: '#1D4ED8',
+    fontSize: 12,
+    fontFamily: 'Sora_600SemiBold',
+    lineHeight: 18,
+  },
+
   deadlineBanner: {
     backgroundColor: 'rgba(249, 115, 22, 0.08)',
     borderWidth: 1,
@@ -995,6 +1049,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Sora_600SemiBold',
     marginTop: 2,
+  },
+
+  meetingCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  meetingCardTitle: {
+    color: '#047857',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+    marginBottom: 6,
+  },
+  meetingCardDesc: {
+    color: '#065F46',
+    fontSize: 13,
+    fontFamily: 'Sora_400Regular',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  meetingButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  meetingButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  meetingLockedCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  meetingLockedText: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Sora_400Regular',
+    lineHeight: 19,
   },
 
   countCard: {
@@ -1246,6 +1347,21 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     fontSize: 14,
     fontFamily: 'Sora_700Bold',
+  },
+  openBadge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+    borderWidth: 1.5,
+    borderColor: '#2563EB',
+    padding: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  openBadgeText: {
+    color: '#1D4ED8',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+    textAlign: 'center',
   },
   noLinkNote: {
     color: Colors.light.textSecondary,
