@@ -141,26 +141,7 @@ export default function EventDetails() {
   };
   load();
 }, [id]);
-  useEffect(() => {
-  const subscription = AppState.addEventListener(
-    "change",
-    (nextState) => {
-
-      if (
-        nextState === "active" &&
-        (global as any).registrationInProgress
-      ) {
-        (global as any).registrationInProgress = false;
-
-        router.push(
-          `/registration-confirmation?eventId=${(global as any).registrationEventId}`
-        );
-      }
-    }
-  );
-
-  return () => subscription.remove();
-}, []);
+  
 
   // User is in registeredUsers → fully registered
   const isRegistered = event?.registeredUsers?.includes(currentUid ?? '') ?? false;
@@ -228,11 +209,7 @@ export default function EventDetails() {
     }
   };
 
-  // ── REGISTER NOW ─────────────────────────────────────────────────────────────
-  // Adds user to registeredUsers[] AND sends confirmation + deadline notification immediately
-    const handleRegisterNow = async () => {
-  console.log("REGISTER BUTTON CLICKED");
-
+  const handleRegisterNow = async () => {
   if (deadlineDateTime && new Date(deadlineDateTime) < new Date()) {
     Alert.alert(
       "Registration Closed",
@@ -254,60 +231,21 @@ export default function EventDetails() {
     return;
   }
 
-  console.log("Passed initial checks");
-
   setRegisterLoading(true);
 
   try {
-    console.log("Fetching fresh event...");
-
+    // Recheck seat availability
     const fresh = await fetchEventById(id!);
-
-    console.log("Fresh event:", fresh);
 
     const freshCount = fresh?.registeredUsers?.length ?? 0;
     const freshLimit = fresh?.seatLimit ?? null;
 
-    console.log("freshCount =", freshCount);
-    console.log("freshLimit =", freshLimit);
-
     if (freshLimit !== null && freshCount >= freshLimit) {
       Alert.alert("Event Full", "Sorry, no seats left.");
-      setRegisterLoading(false);
       return;
     }
-
-    console.log("Before getDoc");
-
-    const userSnap = await getDoc(
-      doc(db, "users", currentUid)
-    );
-
-    console.log("After getDoc");
-
-    if (!userSnap.exists()) {
-      console.log("User document not found");
-      Alert.alert("Error", "User profile not found.");
-      return;
-    }
-
-    console.log("User exists");
-
-    const userData = userSnap.data();
-
-    console.log("User data =", userData);
-
-    console.log("Before updateDoc");
-
-    await updateDoc(doc(db, "events", id!), {
-      pendingRegistrations: arrayUnion(currentUid),
-    });
-
-    console.log("After updateDoc");
 
     const formLink = event?.registerLink?.trim();
-
-    console.log("Form link =", formLink);
 
     if (!formLink) {
       Alert.alert(
@@ -317,35 +255,29 @@ export default function EventDetails() {
       return;
     }
 
-    console.log("Before canOpenURL");
-
     const supported = await Linking.canOpenURL(formLink);
 
-    console.log("CAN OPEN =", supported);
-
     if (!supported) {
-      Alert.alert("Cannot open form link");
+      Alert.alert(
+        "Error",
+        "Cannot open registration form."
+      );
       return;
     }
 
-    console.log("Opening URL");
-    (global as any).registrationInProgress = true;
+    // Store event id for confirmation screen
     (global as any).registrationEventId = id;
-    await Linking.openURL(formLink);
-    router.push(
-  `/registration-confirmation?eventId=${id}`
-);
-    console.log("URL opened successfully");
 
-    Alert.alert(
-      "Complete Registration",
-      "Please submit the Google Form to complete your registration."
+    // Open Google Form
+    await Linking.openURL(formLink);
+
+    // Navigate to confirmation page
+    router.push(
+      `/registration-confirmation?eventId=${id}`
     );
 
   } catch (err: any) {
     console.log("REGISTER ERROR =", err);
-    console.log("REGISTER ERROR MESSAGE =", err?.message);
-    console.log("REGISTER ERROR CODE =", err?.code);
 
     Alert.alert(
       "Error",
@@ -355,7 +287,6 @@ export default function EventDetails() {
     setRegisterLoading(false);
   }
 };
-
   // ── UNREGISTER ───────────────────────────────────────────────────────────────
   const handleUnmarkInterest = async () => {
     Alert.alert(

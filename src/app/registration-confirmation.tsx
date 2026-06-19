@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { auth, db } from "../firebase/firebaseConfig";
 
@@ -6,13 +12,22 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  arrayRemove,
 } from "firebase/firestore";
 
 export default function RegistrationConfirmation() {
   const { eventId } = useLocalSearchParams();
 
+  const [submitted, setSubmitted] = useState(false);
+
   const handleConfirm = async () => {
+    if (!submitted) {
+      Alert.alert(
+        "Confirmation Required",
+        "Please confirm that you submitted the form."
+      );
+      return;
+    }
+
     try {
       const uid = auth.currentUser?.uid;
 
@@ -22,7 +37,6 @@ export default function RegistrationConfirmation() {
       }
 
       await updateDoc(doc(db, "events", String(eventId)), {
-        
         registeredUsers: arrayUnion(uid),
       });
 
@@ -43,7 +57,6 @@ export default function RegistrationConfirmation() {
       style={{
         flex: 1,
         justifyContent: "center",
-        alignItems: "center",
         padding: 20,
       }}
     >
@@ -52,9 +65,10 @@ export default function RegistrationConfirmation() {
           fontSize: 28,
           fontWeight: "bold",
           marginBottom: 15,
+          textAlign: "center",
         }}
       >
-        🎉 Form Submitted
+        🎉 Registration Confirmation
       </Text>
 
       <Text
@@ -63,16 +77,43 @@ export default function RegistrationConfirmation() {
           marginBottom: 30,
         }}
       >
-        Click below to confirm your registration.
+        Did you submit the Google Form?
       </Text>
 
+      {/* Checkbox */}
       <TouchableOpacity
+        onPress={() => setSubmitted(!submitted)}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: 25,
+        }}
+      >
+        <Text style={{ fontSize: 22 }}>
+          {submitted ? "☑️" : "⬜"}
+        </Text>
+
+        <Text
+          style={{
+            marginLeft: 10,
+            fontSize: 16,
+          }}
+        >
+          I confirm that I have submitted the form
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        disabled={!submitted}
         onPress={handleConfirm}
         style={{
-          backgroundColor: "#22c55e",
+          backgroundColor: submitted
+            ? "#22c55e"
+            : "#9ca3af",
           paddingHorizontal: 30,
           paddingVertical: 15,
           borderRadius: 12,
+          alignItems: "center",
         }}
       >
         <Text
@@ -82,6 +123,20 @@ export default function RegistrationConfirmation() {
           }}
         >
           ✅ Confirm Registration
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() =>
+          router.replace(`/event-details?id=${eventId}`)
+        }
+        style={{
+          marginTop: 15,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "#2563eb" }}>
+          ← Back to Event
         </Text>
       </TouchableOpacity>
     </View>
