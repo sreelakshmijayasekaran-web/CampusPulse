@@ -16,8 +16,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
 } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -36,6 +36,7 @@ export default function Profile() {
   const [userData, setUserData] = useState<any>(null);
   const [registeredEvents, setRegisteredEvents] = useState<Event[]>([]);
   const [postedEvents, setPostedEvents] = useState<Event[]>([]);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -65,24 +66,13 @@ export default function Profile() {
     fetchUser();
   }, []);
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            await auth.signOut();
-            router.replace('/login');
-          },
-        },
-      ]
-    );
-  };
-
+  const handleLogout = () => {
+  setShowLogoutModal(true);
+};
+  const confirmLogout = async () => {
+  await auth.signOut();
+  router.replace("/login");
+};
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -225,6 +215,95 @@ export default function Profile() {
           onPress={handleLogout}
           last
         />
+
+        <Modal
+  visible={showLogoutModal}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowLogoutModal(false)}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    <View
+      style={{
+        width: 280,
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 18,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: "600",
+          textAlign: "center",
+          marginBottom: 8,
+        }}
+      >
+        Log Out
+      </Text>
+
+      <Text
+        style={{
+          textAlign: "center",
+          color: "#64748B",
+          marginBottom: 18,
+        }}
+      >
+        Are you sure you want to log out?
+      </Text>
+
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setShowLogoutModal(false)}
+          style={{
+            flex: 1,
+            backgroundColor: "#E5E7EB",
+            paddingVertical: 10,
+            borderRadius: 8,
+            marginRight: 6,
+            alignItems: "center",
+          }}
+        >
+          <Text>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={confirmLogout}
+          style={{
+            flex: 1,
+            backgroundColor: "#EF4444",
+            paddingVertical: 10,
+            borderRadius: 8,
+            marginLeft: 6,
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontWeight: "600",
+            }}
+          >
+            Log Out
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
+
       </View>
 
       <View style={{ height: 32 }} />

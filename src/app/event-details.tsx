@@ -20,7 +20,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Modal
 } from 'react-native';
 import { Colors, Gradients } from '../constants/theme';
 import {
@@ -80,6 +81,7 @@ export default function EventDetails() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
   const [hasMarkedInterest, setHasMarkedInterest] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const currentUid = auth.currentUser?.uid;
@@ -271,32 +273,24 @@ export default function EventDetails() {
       setRegisterLoading(false);
     }
   };
+  const handleUnmarkInterest = () => {
+  setShowRemoveModal(true);
+};
+const confirmRemoveRegistration = async () => {
+  setUnregLoading(true);
 
-  const handleUnmarkInterest = async () => {
-    Alert.alert(
-      'Remove Registration',
-      'Are you sure you want to remove your registration for this event?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setUnregLoading(true);
-            try {
-              await unmarkInterest(id!);
-              const updated = await fetchEventById(id!);
-              setEvent(updated);
-            } catch (err: any) {
-              Alert.alert('Error', err.message);
-            } finally {
-              setUnregLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  };
+  try {
+    await unmarkInterest(id!);
+    const updated = await fetchEventById(id!);
+    setEvent(updated);
+  } catch (err: any) {
+    Alert.alert("Error", err.message);
+  } finally {
+    setUnregLoading(false);
+    setShowRemoveModal(false);
+  }
+};
+  
 
   const handleToggleRegistration = async () => {
     try {
@@ -830,6 +824,87 @@ export default function EventDetails() {
           )}
         </View>
       </Animated.ScrollView>
+      <Modal
+  visible={showRemoveModal}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowRemoveModal(false)}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    <View
+      style={{
+        width: 300,
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 18,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: "600",
+          textAlign: "center",
+          marginBottom: 8,
+        }}
+      >
+        Remove Registration
+      </Text>
+
+      <Text
+        style={{
+          textAlign: "center",
+          color: "#64748B",
+          marginBottom: 18,
+        }}
+      >
+        Are you sure you want to remove your registration?
+      </Text>
+
+      <View
+        style={{
+          flexDirection: "row",
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "#E5E7EB",
+            paddingVertical: 10,
+            borderRadius: 8,
+            marginRight: 6,
+            alignItems: "center",
+          }}
+          onPress={() => setShowRemoveModal(false)}
+        >
+          <Text>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "#EF4444",
+            paddingVertical: 10,
+            borderRadius: 8,
+            marginLeft: 6,
+            alignItems: "center",
+          }}
+          onPress={confirmRemoveRegistration}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>
+            Remove
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
     </View>
   );
 }

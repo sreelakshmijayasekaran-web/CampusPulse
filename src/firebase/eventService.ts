@@ -24,20 +24,29 @@ export type Event = {
   club: string;
   category: string;
   description: string;
+
   registerLink: string;
-  registeredUsers: string[];   // fully registered users
-  interestedUsers?: string[];  // users who only marked interest
+
+  meetingLink?: string;
+  meetingLinkDescription?: string;
+
+  requiresRegistration?: boolean;
+
+  registeredUsers: string[];
+  interestedUsers?: string[];
+
   status: 'pending' | 'approved' | 'rejected';
   createdBy: string;
+
   deadlineDate?: string;
   deadlineTime?: string;
+
   seatLimit?: number | null;
   posterUrl?: string | null;
   eventDate?: string;
-  registrationClosed?: boolean;
-  pendingRegistrations?: string[];
-};
 
+  registrationClosed?: boolean;
+};
 // ── Create Event ──────────────────────────────────────────────────────────────
 
 export async function createEvent(data: {
