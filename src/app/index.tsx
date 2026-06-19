@@ -155,13 +155,23 @@ export default function HomeScreen() {
     if (!event.time?.includes('T')) return false;
     return new Date(event.time) > now;
   });
-  const recentlyHappened = filteredEvents.filter((event) => {
-    if (!event.time?.includes('T')) return false;
-    return new Date(event.time) < now;
-  });
-  const trendingEvents = [...filteredEvents].sort(
-    (a, b) => (b.registeredUsers?.length || 0) - (a.registeredUsers?.length || 0)
-  );
+  const sevenDaysAgo = new Date();
+sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+const recentlyHappened = filteredEvents.filter((event) => {
+  if (!event.time) return false;
+
+  const eventDate = new Date(event.time);
+
+  return eventDate < now && eventDate >= sevenDaysAgo;
+});
+  const trendingEvents = happeningToday
+  .sort(
+    (a, b) =>
+      (b.registeredUsers?.length || 0) -
+      (a.registeredUsers?.length || 0)
+  )
+  .slice(0, 5);
 
   const firstName = userName?.split(' ')[0] ?? 'there';
 

@@ -171,10 +171,15 @@ export async function markInterest(eventId: string) {
 
 export async function unmarkInterest(eventId: string) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in.');
+
+  if (!user) {
+    throw new Error('Not logged in.');
+  }
+
   await updateDoc(doc(db, 'events', eventId), {
     registeredUsers: arrayRemove(user.uid),
     interestedUsers: arrayRemove(user.uid),
+    pendingRegistrations: arrayRemove(user.uid),
   });
 }
 

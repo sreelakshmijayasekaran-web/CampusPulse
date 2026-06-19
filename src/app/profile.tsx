@@ -138,7 +138,16 @@ export default function Profile() {
         <ProfileRow icon="business-outline" label="Department" value={userData.department || 'Not added'} />
         <ProfileRow icon="ribbon-outline" label="Year" value={userData.year || 'Not added'} />
         <ProfileRow icon="school-outline" label="College" value={userData.college || 'Not added'} last />
+        <TouchableOpacity
+        style={styles.editBtn}
+        onPress={() => router.push('/profile-edit')}
+      >
+        <Text style={styles.editBtnText}>✏️ Edit Profile</Text>
+      </TouchableOpacity>
       </View>
+            
+
+
 
       {/* ── HISTORY SECTIONS ── */}
 
@@ -244,6 +253,7 @@ function ProfileRow({
     </View>
   );
 }
+
 
 function HistoryCard({
   icon,
@@ -525,4 +535,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Sora_600SemiBold',
   },
+  editBtn: {
+  marginTop: 16,
+  backgroundColor: Colors.light.primary,
+  paddingVertical: 12,
+  borderRadius: 12,
+  alignItems: 'center',
+},
+
+editBtnText: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  fontFamily: 'Sora_600SemiBold',
+},
 });

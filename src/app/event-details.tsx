@@ -516,6 +516,13 @@ export default function EventDetails() {
       hour12: true,
     });
   };
+  const now = new Date();
+
+    const eventDate = event?.time
+      ? new Date(event.time)
+      : null;
+
+    const eventEnded = eventDate && eventDate < now;
 
   if (loading) {
     return (
@@ -718,26 +725,37 @@ export default function EventDetails() {
           <Text style={styles.description}>
             {event.description?.trim() ? event.description : 'No description provided yet.'}
           </Text>
-
+          
           {/* ── CTA Section ── */}
-          {isRegistered ? (
-            // Already fully registered
-            <View>
-              <View style={styles.registeredBadge}>
-                <Text style={styles.registeredBadgeText}>✅ You're Registered</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.unregisterButton}
-                onPress={handleUnmarkInterest}
-                disabled={unregLoading}
-              >
-                {unregLoading
-                  ? <ActivityIndicator color={Colors.light.error} />
-                  : <Text style={styles.unregisterButtonText}>✕ Remove Registration</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          ) : registrationClosed ? (
+          {eventEnded ? (
+  <View style={styles.fullBadge}>
+    <Text style={styles.fullBadgeText}>
+      ✅ Event Completed
+    </Text>
+  </View>
+) : isRegistered ? (
+  <View>
+    <View style={styles.registeredBadge}>
+      <Text style={styles.registeredBadgeText}>
+        ✅ You're Registered
+      </Text>
+    </View>
+
+    <TouchableOpacity
+      style={styles.unregisterButton}
+      onPress={handleUnmarkInterest}
+      disabled={unregLoading}
+    >
+      {unregLoading ? (
+        <ActivityIndicator color={Colors.light.error} />
+      ) : (
+        <Text style={styles.unregisterButtonText}>
+          ✕ Remove Registration
+        </Text>
+      )}
+    </TouchableOpacity>
+  </View>
+) : registrationClosed ? (
             <View style={styles.fullBadge}>
               <Text style={styles.fullBadgeText}>
                 🚫 Registration Closed By Organizer
